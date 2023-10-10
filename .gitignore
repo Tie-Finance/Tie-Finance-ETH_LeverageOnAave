@@ -1,0 +1,8 @@
+.env
+node_modules
+build
+.idea
+.vscode
+yarn.lock
+.DS_Store
+truffle-config.js

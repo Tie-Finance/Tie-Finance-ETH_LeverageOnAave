@@ -1,0 +1,30 @@
+{
+  "name": "indexes_fi",
+  "version": "0.9.0",
+  "description": "ETH Leverage Contract for IndexesFi",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "truffle test",
+    "node": "ganache --fork https://eth-mainnet.g.alchemy.com/v2/EunaIi8B5e3YrP44W8I44NI6i9x5u1sW --account=\"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80,10000000000000000000000\" --account=\"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80,10000000000000000000000\"  --account=\"0x124fc57a87902b6c7698377b1f689dc85cb2c406426f3432f60d6e5e10d894c4,10000000000000000000000\" ",
+    "deploy": "truffle migrate"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.8.2",
+    "@openzeppelin/contracts-upgradeable": "^4.8.2",
+    "dotenv": "^16.0.0",
+    "ethers": "^6.3.0",
+    "moonbeam-truffle-plugin": "^3.0.0",
+    "truffle": "^5.9.1",
+    "typescript": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.1",
+    "@types/node": "^17.0.31",
+    "chai": "^4.3.7",
+    "ethereum-waffle": "^4.0.10",
+    "truffle-plugin-verify": "^0.6.2"
+  }
+}
