@@ -44,7 +44,7 @@ contract ethController is IController, Ownable, ReentrancyGuard {
     constructor(
         address _vault,
         address _subStrategy,
-        ERC20 _asset,
+        //ERC20 _asset,
         address _treasury,
         address _weth
     ) {
@@ -52,7 +52,7 @@ contract ethController is IController, Ownable, ReentrancyGuard {
         subStrategy = _subStrategy;
 
         // Address zero for asset means ETH
-        asset = _asset;
+        //asset = _asset;
         treasury = _treasury;
 
         weth = _weth;
