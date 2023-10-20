@@ -75,8 +75,8 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     enum SrategyState {
         Normal,
         Deposit,
-        Withdraw,
-        EmergencyWithdraw
+        Withdraw
+        //EmergencyWithdraw
     }
 
     event SetController(address controller);
@@ -185,7 +185,7 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
             TransferHelper.safeTransferETH(exchange, ethBal);
             // Swap ETH to STETH
             uint256 minOut = IAavePool(IaavePool).convertEthTo(ethBal*(magnifier-swapSlippage)/magnifier,stETH,1e18);
-            IExchange(exchange).swapStETH(ethBal,minOut);
+            IExchange(exchange).swapStETH(stETH,ethBal,minOut);
     
             // Deposit STETH to AAVE
             uint256 stETHBal = IERC20(stETH).balanceOf(address(this));
@@ -216,12 +216,12 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
             // Swap STETH to ETH
             TransferHelper.safeTransfer(stETH, exchange, stETHAmt);
             uint256 minOut = IAavePool(IaavePool).convertToEth(stETHAmt*(magnifier-swapSlippage)/magnifier,stETH,1e18);
-            IExchange(exchange).swapETH(stETHAmt,minOut);
+            IExchange(exchange).swapETH(stETH,stETHAmt,minOut);
             // Deposit WETH
             TransferHelper.safeTransferETH(weth, (loanAmt + feeAmt));
             // Repay Weth to receiver
             TransferHelper.safeTransfer(weth, receiver, loanAmt + feeAmt);
-        } else if (curState == SrategyState.EmergencyWithdraw) {
+        } /*else if (curState == SrategyState.EmergencyWithdraw) {
             // Withdraw ETH from WETH
             uint256 stETHAmt = (loanAmt *
                 IERC20(astETH).balanceOf(address(this))) / IAavePool(IaavePool).getDebt(address(this));
@@ -244,7 +244,7 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
             TransferHelper.safeTransferETH(weth, flashAll);
             // Repay Weth to receiver
             TransferHelper.safeTransfer(weth, receiver, flashAll);
-        } else {
+        }*/ else {
             revert("NOT_A_SS_STATE");
         }
     }
@@ -385,7 +385,7 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         TransferHelper.safeTransferETH(exchange, wethAmt);
         // Swap ETH to STETH
         uint256 minOut = IAavePool(IaavePool).convertEthTo(wethAmt*(magnifier-swapSlippage)/magnifier,stETH,1e18);
-        IExchange(exchange).swapStETH(wethAmt,minOut);
+        IExchange(exchange).swapStETH(stETH,wethAmt,minOut);
 
         // Deposit STETH to AAVE
         uint256 stETHBal = IERC20(stETH).balanceOf(address(this));

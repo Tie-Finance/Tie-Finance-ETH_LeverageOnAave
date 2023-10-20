@@ -37,7 +37,7 @@ contract ETHLeverExchangePolygon is Ownable, IExchange {
         _;
     }
 
-    function swapStETH(uint256 amount,uint256 minAmount) external override onlyLeverSS {
+    function swapStETH(address token,uint256 amount,uint256 minAmount) external override onlyLeverSS {
         require(address(this).balance >= amount, "INSUFFICIENT_ETH");
         /*
         0 : stMatic
@@ -56,7 +56,7 @@ contract ETHLeverExchangePolygon is Ownable, IExchange {
         TransferHelper.safeTransfer(stETH, leverSS, stETHBal);
     }
 
-    function swapETH(uint256 amount,uint256 minAmount) external override onlyLeverSS {
+    function swapETH(address token,uint256 amount,uint256 minAmount) external override onlyLeverSS {
         require(
             IERC20(stETH).balanceOf(address(this)) >= amount,
             "INSUFFICIENT_STETH"
@@ -72,7 +72,7 @@ contract ETHLeverExchangePolygon is Ownable, IExchange {
         // Transfer STETH to LeveraSS
         TransferHelper.safeTransferETH(leverSS, ethBal);
     }
-
+    /*
     function swapExactETH(
         uint256 input,
         uint256 output
@@ -113,4 +113,5 @@ contract ETHLeverExchangePolygon is Ownable, IExchange {
         // Transfer STETH to LeveraSS
         TransferHelper.safeTransferETH(leverSS, ethBal);
     }
+    */
 }

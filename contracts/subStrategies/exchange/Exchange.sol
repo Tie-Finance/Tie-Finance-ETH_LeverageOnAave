@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../interfaces/ICurve.sol";
 import "../interfaces/IStETH.sol";
+import "../interfaces/IWstETH.sol";
 import "../interfaces/IExchange.sol";
 import "../../utils/TransferHelper.sol";
 
@@ -36,14 +37,15 @@ contract ETHLeverExchange is Ownable, IExchange {
         require(_msgSender() == leverSS, "ONLY_LEVER_VAULT_CALL");
         _;
     }
-
-    function swapStETH(uint256 amount,uint256 minAmount) external override onlyLeverSS {
+    
+    function swapStETH(address token,uint256 amount,uint256 minAmount) external override onlyLeverSS {
         require(address(this).balance >= amount, "INSUFFICIENT_ETH");
 
+        if (token != stETH){
+            minAmount = IWstETH(token).getStETHByWstETH(minAmount);
+        } 
         uint256 curveOut = ICurve(curvePool).get_dy(0, 1, amount);
-        uint256 stEthAmount = IStETH(stETH).getSharesByPooledEth(amount);
-        if (curveOut < stEthAmount) {
-            require(stEthAmount>=minAmount,"ETH_STETH_SLIPPAGE");
+        if (curveOut < amount) {
             IStETH(stETH).submit{value: address(this).balance}(address(this));
         } else {
             require(curveOut>=minAmount,"ETH_STETH_SLIPPAGE");
@@ -55,17 +57,25 @@ contract ETHLeverExchange is Ownable, IExchange {
             );
         }
         uint256 stETHBal = IERC20(stETH).balanceOf(address(this));
-
+        if (token != stETH){
+            IERC20(stETH).approve(token, 0);
+            IERC20(stETH).approve(token, stETHBal);
+            IWstETH(token).wrap(stETHBal);
+            stETHBal = IERC20(token).balanceOf(address(this));
+        }
         // Transfer STETH to LeveraSS
-        TransferHelper.safeTransfer(stETH, leverSS, stETHBal);
+        TransferHelper.safeTransfer(token, leverSS, stETHBal);
     }
 
-    function swapETH(uint256 amount,uint256 minAmount) external override onlyLeverSS {
+    function swapETH(address token,uint256 amount,uint256 minAmount) external override onlyLeverSS {
         require(
-            IERC20(stETH).balanceOf(address(this)) >= amount,
+            IERC20(token).balanceOf(address(this)) >= amount,
             "INSUFFICIENT_STETH"
         );
-
+        if (token != stETH){
+            IWstETH(token).unwrap(amount);
+            amount = IERC20(stETH).balanceOf(address(this));
+        }
         // Approve STETH to curve
         IERC20(stETH).approve(curvePool, 0);
         IERC20(stETH).approve(curvePool, amount);
@@ -76,7 +86,7 @@ contract ETHLeverExchange is Ownable, IExchange {
         // Transfer STETH to LeveraSS
         TransferHelper.safeTransferETH(leverSS, ethBal);
     }
-
+    /*
     function swapExactETH(
         uint256 input,
         uint256 output
@@ -117,4 +127,5 @@ contract ETHLeverExchange is Ownable, IExchange {
         // Transfer STETH to LeveraSS
         TransferHelper.safeTransferETH(leverSS, ethBal);
     }
+    */
 }
