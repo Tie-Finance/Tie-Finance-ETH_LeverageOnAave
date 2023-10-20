@@ -67,7 +67,8 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     uint256 public override maxDeposit;
 
     // Last Earn Total
-    uint256 public lastTotal;
+    uint256 internal lastTotal;
+    bool internal harvested = false;
 
     // Max Loan Ratio
     uint256 public mlr;
@@ -152,10 +153,12 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     }
     modifier collectFee(){
         (,uint256 mintAmount) = _calculateFee();
+        harvested = true;
         if(mintAmount>0){
             IVault(vault).mint(mintAmount, feePool);
         }
         _;
+        harvested = false;
         lastTotal = _realTotalAssets();
     }
     //////////////////////////////////////////
@@ -264,8 +267,12 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         Internal view function of total USDC deposited
     */
     function _totalAssets() internal view returns (uint256) {
-        (uint256 fee,) = _calculateFee();
-        return _realTotalAssets() - fee;
+        if (!harvested){
+            (uint256 fee,) = _calculateFee();
+            return _realTotalAssets() - fee;
+        }else{
+            return _realTotalAssets();
+        }
     }
     function _realTotalAssets()internal view returns (uint256) {
         (uint256 st,uint256 e) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
