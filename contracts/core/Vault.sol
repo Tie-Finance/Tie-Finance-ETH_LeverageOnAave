@@ -6,18 +6,17 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import "../interfaces/IController.sol";
 import "../interfaces/IVault.sol";
-import "../utils/TransferHelper.sol";
 
 
-contract ethVault is IVault, ERC20, Ownable, ReentrancyGuard {
-    using SafeERC20 for ERC20;
+contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
     using Math for uint256;
 
-    ERC20 public asset;
+    IERC20Metadata public asset;
 
     string public constant version = "3.0";
 
@@ -69,7 +68,7 @@ contract ethVault is IVault, ERC20, Ownable, ReentrancyGuard {
 
 
     constructor(
-        ERC20 _asset,
+        IERC20Metadata _asset,
         string memory _name,
         string memory _symbol
     ) ERC20(_name, _symbol) {
@@ -79,40 +78,43 @@ contract ethVault is IVault, ERC20, Ownable, ReentrancyGuard {
     }
 
     function deposit(
+        uint256 amount,
         address receiver
     )
         public
-        payable
         virtual
         override
         nonReentrant
         unPaused
         returns (uint256 shares)
     {
-        uint256 assets = msg.value;
-        require(assets != 0, "ZERO_ASSETS");
-        require(assets <= maxDeposit, "EXCEED_ONE_TIME_MAX_DEPOSIT");
+        require(amount != 0, "ZERO_ASSETS");
+        require(receiver != address(0), "ZERO_ADDRESS");
+        require(amount <= maxDeposit, "EXCEED_ONE_TIME_MAX_DEPOSIT");
 
         // Need to transfer before minting or ERC777s could reenter.
-        TransferHelper.safeTransferETH(address(controller), assets);
-
+        IERC20(asset).safeTransferFrom(msg.sender, address(controller), amount);
         // Total Assets amount until now
+        return _deposit(amount,receiver);
+    }
+    function _deposit(uint256 amount,address receiver)internal returns (uint256 shares){
         uint256 totalDeposit = IController(controller).totalAssets();
+        uint256 total = totalSupply();
 
         // Calls Deposit function on controller
-        uint256 newDeposit = IController(controller).deposit(assets);
+        uint256 newDeposit = IController(controller).deposit(amount);
 
         require(newDeposit > 0, "INVALID_DEPOSIT_SHARES");
 
         // Calculate share amount to be mint
-        shares = totalSupply() == 0 || totalDeposit == 0
-            ? assets.mulDiv(
+        shares = total == 0 || totalDeposit == 0
+            ? amount.mulDiv(
                 10 ** decimals(),
                 10 ** asset.decimals(),
                 Math.Rounding.Down
             )
             : newDeposit.mulDiv(
-                totalSupply(),
+                total,
                 totalDeposit,
                 Math.Rounding.Down
             );
@@ -120,9 +122,8 @@ contract ethVault is IVault, ERC20, Ownable, ReentrancyGuard {
         // Mint INDEX token to receiver
         _mint(receiver, shares);
 
-        emit Deposit(address(asset), msg.sender, receiver, assets, shares);
+        emit Deposit(address(asset), msg.sender, receiver, amount, shares);
     }
-
     function mint(
         uint256 amount,
         address account
@@ -141,6 +142,7 @@ contract ethVault is IVault, ERC20, Ownable, ReentrancyGuard {
         returns (uint256 shares)
     {
         require(assets != 0, "ZERO_ASSETS");
+        require(receiver != address(0), "ZERO_ADDRESS");
         require(assets <= maxWithdraw, "EXCEED_ONE_TIME_MAX_WITHDRAW");
         // Calculate share amount to be burnt
         shares =
@@ -148,8 +150,6 @@ contract ethVault is IVault, ERC20, Ownable, ReentrancyGuard {
             IController(controller).totalAssets();
 
         require(shares > 0, "INVALID_WITHDRAW_SHARES");
-        require(balanceOf(msg.sender) >= shares, "EXCEED_TOTAL_DEPOSIT");
-
         _withdraw(assets, shares, receiver);
     }
 
@@ -164,8 +164,7 @@ contract ethVault is IVault, ERC20, Ownable, ReentrancyGuard {
         returns (uint256 assets)
     {
         require(shares != 0, "ZERO_SHARES");
-        require(shares <= balanceOf(msg.sender), "EXCEED_TOTAL_BALANCE");
-
+        require(receiver != address(0), "ZERO_ADDRESS");
         assets =
             (shares * IController(controller).totalAssets()) /
             totalSupply();
@@ -181,7 +180,7 @@ contract ethVault is IVault, ERC20, Ownable, ReentrancyGuard {
     }
 
     function assetsPerShare() public view returns (uint256) {
-        return IController(controller).totalAssets() / totalSupply();
+        return IController(controller).totalAssets()*1e18 / totalSupply();
     }
 
     function convertToShares(
@@ -248,7 +247,7 @@ contract ethVault is IVault, ERC20, Ownable, ReentrancyGuard {
         uint256 assets,
         uint256 shares,
         address receiver
-    ) internal {
+    ) internal returns(uint256) {
         require(shares != 0, "SHARES_TOO_LOW");
         // Calls Withdraw function on controller
         (uint256 withdrawn, uint256 fee) = IController(controller).withdraw(
@@ -268,5 +267,6 @@ contract ethVault is IVault, ERC20, Ownable, ReentrancyGuard {
             shares,
             fee
         );
+        return withdrawn-fee;
     }
 }

@@ -12,7 +12,4 @@ interface ISubStrategy {
 
     function withdrawable(uint256 _amount) external view returns (uint256);
 
-    function latestHarvest() external view returns (uint256);
-
-    function harvestGap() external view returns (uint256);
 }

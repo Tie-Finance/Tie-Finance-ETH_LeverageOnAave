@@ -3,20 +3,20 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
 
 import "./interfaces/IAavePool.sol";
 import "./interfaces/IAave.sol";
 import "./interfaces/IETHLeverage.sol";
 import "./interfaces/IFlashloanReceiver.sol";
-import "./interfaces/IWeth.sol";
 import "./interfaces/IExchange.sol";
 import "../interfaces/ISubStrategy.sol";
 import "../interfaces/IVault.sol";
 
-import "../utils/TransferHelper.sol";
-
 contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
 
+    using SafeERC20 for IERC20;
     // Sub Strategy name
     string public constant poolName = "ETHStrategy V0.9";
 
@@ -29,12 +29,6 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     // Constant magnifier
     uint256 public constant magnifier = 10000;
 
-    // Harvest Gap
-    uint256 public override harvestGap;
-
-    // Latest Harvest
-    uint256 public override latestHarvest;
-
     // Exchange Address
     address public exchange;
 
@@ -44,14 +38,14 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     // Fee collector
     address public feePool;
 
-    // WETH Address
-    address public weth;
+    // user input asset
+    IERC20 public baseAsset;
 
-    // STETH Address
-    address public stETH;
+    // deposit asset into aave pool
+    IERC20 public depositAsset;
 
-    // ASTETH Address
-    address public astETH;
+    // aave pool token
+    IERC20 public aDepositAsset;
 
     // aave address
     address public IaavePool;
@@ -94,8 +88,6 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
 
     event SetSwapSlippage(uint256 swapSlippage);
 
-    event SetHarvestGap(uint256 harvestGap);
-
     event SetMaxDeposit(uint256 maxDeposit);
 
     event SetFlashloanReceiver(address receiver);
@@ -112,18 +104,18 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     );
 
     constructor(
-        address _weth,
-        address _stETH,
-        address _astETH,
+        IERC20 _baseAsset,
+        IERC20 _depositAsset,
+        IERC20 _aDepositAsset,
         uint256 _mlr,
         address _IaavePool,
         address _vault,
         address _feePool
     ) {
         mlr = _mlr;
-        weth = _weth;
-        stETH = _stETH;
-        astETH = _astETH;
+        baseAsset = _baseAsset;
+        depositAsset = _depositAsset;
+        aDepositAsset = _aDepositAsset;
         IaavePool = _IaavePool;
 
         vault = _vault;
@@ -132,6 +124,9 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
 
         // Set Max Deposit as max uin256
         maxDeposit = type(uint256).max;
+        address aave = IAavePool(_IaavePool).aave();
+        baseAsset.safeApprove(aave, type(uint256).max);
+        depositAsset.safeApprove(aave, type(uint256).max);
     }
 
     receive() external payable {}
@@ -173,81 +168,44 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         uint256 feeAmt,
         bytes calldata userData
     ) external override onlyReceiver {
-        SrategyState curState = abi.decode(userData,(SrategyState));
+        (SrategyState curState,uint256 amountIn) = abi.decode(userData,(SrategyState,uint256));
         require(curState != SrategyState.Normal, "NORMAL_STATE_CANT_CALL_THIS");
-        require(
-            IERC20(weth).balanceOf(address(this)) >= loanAmt,
-            "INSUFFICIENT_TRANSFERED"
-        );
         address aave = IAavePool(IaavePool).aave();
         if (curState == SrategyState.Deposit) {
-            // Withdraw ETH from WETH
-            IWeth(weth).withdraw(loanAmt);
-            uint256 ethBal = address(this).balance;
-            // Transfer ETH to Exchange
-            TransferHelper.safeTransferETH(exchange, ethBal);
-            // Swap ETH to STETH
-            uint256 minOut = IAavePool(IaavePool).convertEthTo(ethBal*(magnifier-swapSlippage)/magnifier,stETH,1e18);
-            IExchange(exchange).swapStETH(stETH,ethBal,minOut);
+            // Transfer baseAsset to Exchange
+            amountIn = amountIn+loanAmt;
+            baseAsset.safeTransfer(exchange, amountIn);
+            // Swap baseAsset to depositAsset
+            uint256 minOut = IAavePool(IaavePool).convertAmount(address(baseAsset), address(depositAsset), amountIn*(magnifier-swapSlippage)/magnifier);
+            IExchange(exchange).swap(address(baseAsset),address(depositAsset),amountIn,minOut);
     
-            // Deposit STETH to AAVE
-            uint256 stETHBal = IERC20(stETH).balanceOf(address(this));
-            IERC20(stETH).approve(aave, 0);
-            IERC20(stETH).approve(aave, stETHBal);
+            // Deposit depositAsset to AAVE
+            uint256 depoistBalance = depositAsset.balanceOf(address(this));
 
-            IAave(aave).deposit(stETH, stETHBal, address(this), 0);
+            IAave(aave).deposit(address(depositAsset), depoistBalance, address(this), 0);
             if (IAavePool(IaavePool).getCollateral(address(this)) == 0) {
-                IAave(aave).setUserUseReserveAsCollateral(stETH, true);
+                IAave(aave).setUserUseReserveAsCollateral(address(depositAsset), true);
             }
             // Repay flash loan
             uint256 repay = loanAmt + feeAmt;
-            IAave(aave).borrow(weth, repay, 2, 0, address(this));
+            IAave(aave).borrow(address(baseAsset), repay, 2, 0, address(this));
 
-            TransferHelper.safeTransfer(weth, receiver, repay);
+            baseAsset.safeTransfer(receiver, repay);
         } else if (curState == SrategyState.Withdraw) {
-            // Withdraw ETH from WETH
-            uint256 stETHAmt = (loanAmt *
-                IERC20(astETH).balanceOf(address(this))) / IAavePool(IaavePool).getDebt(address(this));
-            // Approve WETH to AAVE
-            IERC20(weth).approve(aave, 0);
-            IERC20(weth).approve(aave, loanAmt);
+            uint256 withdrawAmount = (loanAmt *
+                aDepositAsset.balanceOf(address(this))) / IAavePool(IaavePool).getDebt(address(this));
 
             // Repay WETH to aave
-            IAave(aave).repay(weth, loanAmt, 2, address(this));
-            IAave(aave).withdraw(stETH, stETHAmt, address(this));
+            IAave(aave).repay(address(baseAsset), loanAmt, 2, address(this));
+            IAave(aave).withdraw(address(depositAsset), withdrawAmount, address(this));
 
-            // Swap STETH to ETH
-            TransferHelper.safeTransfer(stETH, exchange, stETHAmt);
-            uint256 minOut = IAavePool(IaavePool).convertToEth(stETHAmt*(magnifier-swapSlippage)/magnifier,stETH,1e18);
-            IExchange(exchange).swapETH(stETH,stETHAmt,minOut);
-            // Deposit WETH
-            TransferHelper.safeTransferETH(weth, (loanAmt + feeAmt));
+            // Swap depositAsset to baseAsset
+            depositAsset.safeTransfer(exchange, withdrawAmount);
+            uint256 minOut = IAavePool(IaavePool).convertAmount(address(depositAsset), address(baseAsset), withdrawAmount*(magnifier-swapSlippage)/magnifier);
+            IExchange(exchange).swap(address(depositAsset),address(baseAsset),withdrawAmount,minOut);
             // Repay Weth to receiver
-            TransferHelper.safeTransfer(weth, receiver, loanAmt + feeAmt);
-        } /*else if (curState == SrategyState.EmergencyWithdraw) {
-            // Withdraw ETH from WETH
-            uint256 stETHAmt = (loanAmt *
-                IERC20(astETH).balanceOf(address(this))) / IAavePool(IaavePool).getDebt(address(this));
-
-            // Approve WETH to AAVE
-            IERC20(weth).approve(aave, 0);
-            IERC20(weth).approve(aave, loanAmt);
-
-            // Repay WETH to aave
-            IAave(aave).repay(weth, loanAmt, 2, address(this));
-            IAave(aave).withdraw(stETH, stETHAmt, address(this));
-
-            // Swap STETH to repay flashloan
-            IERC20(stETH).approve(exchange, 0);
-            IERC20(stETH).approve(exchange, stETHAmt);
-
-            uint256 flashAll = loanAmt + feeAmt;
-            IExchange(exchange).swapExactETH(stETHAmt, flashAll);
-            // Deposit WETH
-            TransferHelper.safeTransferETH(weth, flashAll);
-            // Repay Weth to receiver
-            TransferHelper.safeTransfer(weth, receiver, flashAll);
-        }*/ else {
+            baseAsset.safeTransfer(receiver, loanAmt + feeAmt);
+        } else {
             revert("NOT_A_SS_STATE");
         }
     }
@@ -298,9 +256,6 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         // Check Max Deposit
         require(prevAmt + _amount <= maxDeposit, "EXCEED_MAX_DEPOSIT");
 
-        uint256 ethAmt = address(this).balance;
-        require(ethAmt >= _amount, "INSUFFICIENT_ETH_TRANSFER");
-
         // Calculate Flashloan Fee - in terms of 1e4
         uint256 fee = IFlashloanReceiver(receiver).getFee();
         uint256 feeParam = fee + magnifier;
@@ -308,7 +263,7 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         // uint256 feeAmt = (loanAmt * fee) / magnifier;
 
         // Execute flash loan
-        IFlashloanReceiver(receiver).flashLoan(weth, loanAmt,abi.encode(SrategyState.Deposit));
+        IFlashloanReceiver(receiver).flashLoan(address(baseAsset), loanAmt,abi.encode(SrategyState.Deposit,_amount));
 
         // Get new total assets amount
         uint256 newAmt = _totalAssets();
@@ -333,10 +288,10 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         require(_amount <= prevAmt, "INSUFFICIENT_ASSET");
 
         uint256 loanAmt = (IAavePool(IaavePool).getDebt(address(this)) * _amount) / prevAmt;
-        IFlashloanReceiver(receiver).flashLoan(weth, loanAmt,abi.encode(SrategyState.Withdraw));
+        IFlashloanReceiver(receiver).flashLoan(address(baseAsset), loanAmt,abi.encode(SrategyState.Withdraw,uint256(0)));
 
-        uint256 toSend = address(this).balance;
-        TransferHelper.safeTransferETH(controller, toSend);
+        uint256 toSend = baseAsset.balanceOf(address(this));
+        baseAsset.safeTransfer(controller, toSend);
 
         return toSend;
     }
@@ -384,22 +339,19 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
             x = y;
         }
 
-        IAave(aave).borrow(weth, x, 2, 0, address(this));
-        uint256 wethAmt = IERC20(weth).balanceOf(address(this));
-        IWeth(weth).withdraw(wethAmt);
+        IAave(aave).borrow(address(baseAsset), x, 2, 0, address(this));
+        uint256 baseAmt = baseAsset.balanceOf(address(this));
 
-        // Transfer ETH to Exchange
-        TransferHelper.safeTransferETH(exchange, wethAmt);
-        // Swap ETH to STETH
-        uint256 minOut = IAavePool(IaavePool).convertEthTo(wethAmt*(magnifier-swapSlippage)/magnifier,stETH,1e18);
-        IExchange(exchange).swapStETH(stETH,wethAmt,minOut);
+        // Transfer base asset to Exchange
+        baseAsset.safeTransfer(exchange, baseAmt);
+        // Swap baseAsset to depositAsset
+        uint256 minOut = IAavePool(IaavePool).convertAmount(address(baseAsset), address(depositAsset),baseAmt*(magnifier-swapSlippage)/magnifier);
+        IExchange(exchange).swap(address(baseAsset),address(depositAsset),baseAmt,minOut);
 
         // Deposit STETH to AAVE
-        uint256 stETHBal = IERC20(stETH).balanceOf(address(this));
-        IERC20(stETH).approve(aave, 0);
-        IERC20(stETH).approve(aave, stETHBal);
+        uint256 depositAmt = depositAsset.balanceOf(address(this));
 
-        IAave(aave).deposit(stETH, stETHBal, address(this), 0);
+        IAave(aave).deposit(address(depositAsset), depositAmt, address(this), 0);
         (uint256 st1,uint256 e1) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         emit LTVUpdate(e, st, e1, st1);
     }
@@ -418,18 +370,13 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
 
         uint256 loanAmt = (x * e) / st;
 
-        IFlashloanReceiver(receiver).flashLoan(weth, loanAmt,abi.encode(SrategyState.Withdraw));
+        IFlashloanReceiver(receiver).flashLoan(address(baseAsset), loanAmt,abi.encode(SrategyState.Withdraw,uint256(0)));
 
-        uint256 toSend = address(this).balance;
-        TransferHelper.safeTransferETH(weth, toSend);
 
-        uint256 wethBal = IERC20(weth).balanceOf(address(this));
+        uint256 baseBal = baseAsset.balanceOf(address(this));
         // Approve WETH to AAVE
-        IERC20(weth).approve(aave, 0);
-        IERC20(weth).approve(aave, wethBal);
-
         // Repay WETH to aave
-        IAave(aave).repay(weth, wethBal, 2, address(this));
+        IAave(aave).repay(address(baseAsset), baseBal, 2, address(this));
     }
 
 
@@ -517,15 +464,6 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         emit SetSwapSlippage(swapSlippage);
     }
 
-    /**
-        Set Harvest Gap
-     */
-    function setHarvestGap(uint256 _harvestGap) public onlyOwner {
-        require(_harvestGap > 0, "INVALID_HARVEST_GAP");
-        harvestGap = _harvestGap;
-
-        emit SetHarvestGap(harvestGap);
-    }
 
     /**
         Set Max Deposit
@@ -560,7 +498,7 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     /**
         Set Fee Rate
      */
-    function setFeeRate(uint256 _rate) public onlyOwner {
+    function setFeeRate(uint256 _rate) public collectFee onlyOwner {
         require(_rate > 0, "INVALID_RATE");
 
         uint256 oldRate = feeRate;

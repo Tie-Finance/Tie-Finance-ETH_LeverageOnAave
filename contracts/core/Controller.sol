@@ -2,15 +2,16 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "../interfaces/IController.sol";
 import "../interfaces/ISubStrategy.sol";
-import "../utils/TransferHelper.sol";
 
-contract ethController is IController, Ownable, ReentrancyGuard {
+contract ethController is IController, Ownable {
+
+    using SafeERC20 for IERC20;
 
     string public constant version = "3.0";
 
@@ -18,10 +19,7 @@ contract ethController is IController, Ownable, ReentrancyGuard {
     address public vault;
 
     // Asset for deposit
-    ERC20 public asset;
-
-    // WETH address
-    address public weth;
+    IERC20 public asset;
 
     address public subStrategy;
 
@@ -44,21 +42,17 @@ contract ethController is IController, Ownable, ReentrancyGuard {
     constructor(
         address _vault,
         address _subStrategy,
-        //ERC20 _asset,
-        address _treasury,
-        address _weth
+        IERC20 _asset,
+        address _treasury
     ) {
         vault = _vault;
         subStrategy = _subStrategy;
 
         // Address zero for asset means ETH
-        //asset = _asset;
+        asset = _asset;
         treasury = _treasury;
 
-        weth = _weth;
     }
-
-    receive() external payable {}
 
     modifier onlyVault() {
         require(vault == _msgSender(), "ONLY_VAULT");
@@ -95,20 +89,21 @@ contract ethController is IController, Ownable, ReentrancyGuard {
         withdrawAmt = ISubStrategy(subStrategy).withdraw(_amount);
 
         if (withdrawAmt > 0) {
+            uint256 balance = asset.balanceOf(address(this));
             require(
-                address(this).balance >= withdrawAmt,
+                balance >= withdrawAmt,
                 "INVALID_WITHDRAWN_AMOUNT"
             );
 
             // Pay Withdraw Fee to treasury and send rest to user
             fee = (withdrawAmt * withdrawFee) / magnifier;
             if (fee > 0) {
-                TransferHelper.safeTransferETH(treasury, fee);
+                asset.safeTransfer(treasury, fee);
             }
 
             // Transfer withdrawn token to receiver
             uint256 toReceive = withdrawAmt - fee;
-            TransferHelper.safeTransferETH(_receiver, toReceive);
+            asset.safeTransfer(_receiver, toReceive);
         }
     }
 
@@ -169,24 +164,13 @@ contract ethController is IController, Ownable, ReentrancyGuard {
         return ISubStrategy(subStrategy).totalAssets();
     }
 
-    function getBalance(
-        address _asset,
-        address _account
-    ) internal view returns (uint256) {
-        if (address(_asset) == address(0) || address(_asset) == weth)
-            return address(_account).balance;
-        else return IERC20(_asset).balanceOf(_account);
-    }
-
     /**
         _deposit is internal function for deposit action, if default option is set, deposit all requested amount to default sub strategy.
         Unless loop through sub strategies regiestered and distribute assets according to the allocpoint of each SS
      */
     function _deposit(uint256 _amount) internal returns (uint256 depositAmt) {
-            // Transfer asset to substrategy
-        TransferHelper.safeTransferETH(subStrategy,_amount);
-
             // Calls deposit function on SubStrategy
+        asset.safeTransfer( subStrategy, _amount);
         depositAmt = ISubStrategy(subStrategy).deposit(_amount);
     }
 }

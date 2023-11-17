@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "../interfaces/IFlashloanReceiver.sol";
 import "../interfaces/IBalancer.sol";
 import "../interfaces/IETHLeverage.sol";
-import "../../utils/TransferHelper.sol";
 
-contract BalancerReceiver is Ownable, IFlashloanReceiver {
+contract BalancerReceiver is IFlashloanReceiver {
 
     // Balancer V2 Vault
     address public balancer;
@@ -47,7 +46,7 @@ contract BalancerReceiver is Ownable, IFlashloanReceiver {
     }
 
     modifier onlyStrategy() {
-        require(_msgSender() == subStrategy, "ONLY_SS_CALLABLE");
+        require(msg.sender == subStrategy, "ONLY_SS_CALLABLE");
         _;
     }
 
@@ -85,7 +84,7 @@ contract BalancerReceiver is Ownable, IFlashloanReceiver {
         uint256 feeAmt = feeAmounts[0];
 
         // Transfer Loan Token to ETH Leverage SS
-        TransferHelper.safeTransfer(address(token), subStrategy, loanAmt);
+        SafeERC20.safeTransfer(token, subStrategy, loanAmt);
 
         // Call Loan Fallback function in SS
         IETHLeverage(subStrategy).loanFallback(loanAmt, feeAmt,userData);
@@ -95,6 +94,6 @@ contract BalancerReceiver is Ownable, IFlashloanReceiver {
             token.balanceOf(address(this)) >= loanAmt + feeAmt,
             "INSUFFICIENT_REFUND"
         );
-        TransferHelper.safeTransfer(address(token), balancer, loanAmt + feeAmt);
+        SafeERC20.safeTransfer(token, balancer, loanAmt + feeAmt);
     }
 }

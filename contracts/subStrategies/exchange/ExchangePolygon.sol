@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "../interfaces/ICurve.sol";
 import "../interfaces/IStETH.sol";
 import "../interfaces/IExchange.sol";
-import "../../utils/TransferHelper.sol";
+import "../interfaces/IWeth.sol";
 
-contract ETHLeverExchangePolygon is Ownable, IExchange {
+contract ETHLeverExchangePolygon is IExchange {
+    using SafeERC20 for IERC20;
     address public leverSS;
 
     address public weth;
@@ -28,90 +29,50 @@ contract ETHLeverExchangePolygon is Ownable, IExchange {
         stETH = _stETH;
         leverSS = _leverSS;
         curvePool = _curvePool;
+        IERC20(stETH).safeApprove(_curvePool, type(uint256).max);
     }
 
     receive() external payable {}
 
     modifier onlyLeverSS() {
-        require(_msgSender() == leverSS, "ONLY_LEVER_VAULT_CALL");
+        require(msg.sender == leverSS, "ONLY_LEVER_VAULT_CALL");
         _;
     }
-
-    function swapStETH(address token,uint256 amount,uint256 minAmount) external override onlyLeverSS {
-        require(address(this).balance >= amount, "INSUFFICIENT_ETH");
+    function swap(address tokenIn,address tokenOut,uint256 amount,uint256 minAmount) external override onlyLeverSS {
+        if (tokenIn == weth){
+            if (tokenOut ==  stETH){
+                uint256 balance = swapEthToStEth(amount,minAmount);
+                IERC20(tokenOut).safeTransfer(leverSS, balance);
+            }else{
+                require(false,"INVALID_SWAP");
+            }
+        }else if (tokenOut == weth){
+            if (tokenIn ==  stETH){
+                uint256 balance = swapSTEthToEth(amount,minAmount);
+                IERC20(tokenOut).safeTransfer(leverSS, balance);
+            }
+        }else{
+            require(false,"INVALID_SWAP");
+        }
+        
+    }
+    function swapEthToStEth(uint256 amount,uint256 minAmount) internal returns(uint256) {
+        IWeth(weth).withdraw(amount);
         /*
         0 : stMatic
         1 : matic
         */
-        ICurve(curvePool).exchange{value: address(this).balance}(
+        return ICurve(curvePool).exchange{value: amount}(
             1,
             0,
             amount,
             minAmount,
             true
         );
-        uint256 stETHBal = IERC20(stETH).balanceOf(address(this));
-
-        // Transfer STETH to LeveraSS
-        TransferHelper.safeTransfer(stETH, leverSS, stETHBal);
     }
-
-    function swapETH(address token,uint256 amount,uint256 minAmount) external override onlyLeverSS {
-        require(
-            IERC20(stETH).balanceOf(address(this)) >= amount,
-            "INSUFFICIENT_STETH"
-        );
-
-        // Approve STETH to curve
-        IERC20(stETH).approve(curvePool, 0);
-        IERC20(stETH).approve(curvePool, amount);
-        ICurve(curvePool).exchange(0, 1, amount, minAmount,true);
-
-        uint256 ethBal = address(this).balance;
-
-        // Transfer STETH to LeveraSS
-        TransferHelper.safeTransferETH(leverSS, ethBal);
+    function swapSTEthToEth(uint256 amount,uint256 minAmount) internal returns(uint256){
+        uint256 balance = ICurve(curvePool).exchange(0, 1, amount, minAmount,true);
+        IWeth(weth).deposit{value: balance}();
+        return balance;
     }
-    /*
-    function swapExactETH(
-        uint256 input,
-        uint256 output
-    ) external override onlyLeverSS {
-        require(
-            IERC20(stETH).balanceOf(_msgSender()) >= input,
-            "INSUFFICIENT_STETH"
-        );
-        require(
-            IERC20(stETH).allowance(_msgSender(), address(this)) >= input,
-            "INSUFFICIENT_ALLOWANCE"
-        );
-
-        // ETH output
-        uint256 ethOut = ICurve(curvePool).get_dy(1, 0, input);
-        require(ethOut >= output, "EXTREME_MARKET");
-
-        // StETH percentage
-        uint256 toSwap = (input * output) / ethOut;
-
-        // Transfer STETH from SS to exchange
-        TransferHelper.safeTransferFrom(
-            stETH,
-            _msgSender(),
-            address(this),
-            toSwap
-        );
-
-        // Approve STETH to curve
-        IERC20(stETH).approve(curvePool, 0);
-        IERC20(stETH).approve(curvePool, toSwap);
-        ICurve(curvePool).exchange(0, 1, toSwap, output,true);
-
-        uint256 ethBal = address(this).balance;
-
-        require(ethBal >= output, "STETH_ETH_SLIPPAGE");
-
-        // Transfer STETH to LeveraSS
-        TransferHelper.safeTransferETH(leverSS, ethBal);
-    }
-    */
 }
