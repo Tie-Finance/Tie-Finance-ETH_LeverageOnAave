@@ -42,16 +42,19 @@ contract ETHLeverExchange is IExchange {
         require(msg.sender == leverSS, "ONLY_LEVER_VAULT_CALL");
         _;
     }
-    function swap(address tokenIn,address tokenOut,uint256 amount,uint256 minAmount) external override onlyLeverSS {
+    function swap(address tokenIn,address tokenOut,uint256 amount,uint256 minAmount) external override onlyLeverSS returns(uint256){
+        IERC20(tokenIn).safeTransferFrom(leverSS,address(this),amount);
         if (tokenIn == weth){
             if (tokenOut ==  stETH){
                 uint256 balance = swapEthToStEth(amount,minAmount);
                 IERC20(tokenOut).safeTransfer(leverSS, balance);
+                return balance;
             }else if(tokenOut ==  wstETH){
                 minAmount = IWstETH(tokenOut).getStETHByWstETH(minAmount);
                 uint256 balance = swapEthToStEth(amount,minAmount);
                 balance = IWstETH(tokenOut).wrap(balance);
                 IERC20(tokenOut).safeTransfer(leverSS, balance);
+                return balance;
             }else{
                 require(false,"INVALID_SWAP");
             }
@@ -59,11 +62,12 @@ contract ETHLeverExchange is IExchange {
             if (tokenIn ==  stETH){
                 uint256 balance =  swapSTEthToEth(amount,minAmount);
                 IERC20(tokenOut).safeTransfer(leverSS, balance);
-
+                return balance;
             }else if(tokenIn == wstETH){
                 amount = IWstETH(tokenIn).unwrap(amount);
                 uint256 balance = swapSTEthToEth(amount,minAmount);
                 IERC20(tokenOut).safeTransfer(leverSS, balance);
+                return balance;
             }
         }else{
             require(false,"INVALID_SWAP");
@@ -92,7 +96,20 @@ contract ETHLeverExchange is IExchange {
         IWeth(weth).deposit{value: balance}();
         return balance;
     }
-    
+    function getCurveInputValue(address tokenIn,address tokenOut,uint256 outAmount,uint256 maxInput)external view override onlyLeverSS returns (uint256){
+        if(tokenOut == weth){
+            if (tokenIn == stETH){
+                uint256 curveOut = ICurve(curvePool).get_dy(1, 0, maxInput);
+                return outAmount*maxInput/curveOut+1;
+            }else if (tokenIn == wstETH){
+                maxInput = IWstETH(tokenIn).getStETHByWstETH(maxInput);
+                uint256 curveOut = ICurve(curvePool).get_dy(1, 0, maxInput);
+                return IWstETH(tokenIn).getWstETHByStETH(outAmount*maxInput/curveOut+1);
+            }
+        }else{
+            require(false,"INVALID_SWAP");
+        }
+    }
     /*
     function swapExactETH(
         uint256 input,

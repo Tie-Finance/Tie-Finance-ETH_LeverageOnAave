@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 
 import "./interfaces/IAavePool.sol";
@@ -14,11 +15,13 @@ import "./interfaces/IExchange.sol";
 import "../interfaces/ISubStrategy.sol";
 import "../interfaces/IVault.sol";
 
-contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
+contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
 
     using SafeERC20 for IERC20;
     // Sub Strategy name
     string public constant poolName = "ETHStrategy V0.9";
+
+    mapping(address=>bool) operator;
 
     // Controller address
     address public controller;
@@ -50,11 +53,6 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     // aave address
     address public IaavePool;
 
-    // Slippages for deposit and withdraw
-    uint256 public depositSlippage;
-    uint256 public withdrawSlippage;
-    uint256 public swapSlippage = 100;
-
     uint256 public feeRate = 1000;
 
     // Max Deposit
@@ -70,8 +68,9 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     enum SrategyState {
         Normal,
         Deposit,
-        Withdraw
-        //EmergencyWithdraw
+        Withdraw,
+        RaiseMLR,
+        ReduceMLR
     }
 
     event SetController(address controller);
@@ -82,12 +81,6 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
 
     event SetFeePool(address feePool);
 
-    event SetDepositSlippage(uint256 depositSlippage);
-
-    event SetWithdrawSlippage(uint256 withdrawSlippage);
-
-    event SetSwapSlippage(uint256 swapSlippage);
-
     event SetMaxDeposit(uint256 maxDeposit);
 
     event SetFlashloanReceiver(address receiver);
@@ -95,6 +88,8 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     event SetMLR(uint256 oldMlr, uint256 newMlr);
 
     event SetFeeRate(uint256 oldRate, uint256 newRate);
+
+    event SetOperator(address operator, bool istrue);
 
     event LTVUpdate(
         uint256 oldDebt,
@@ -138,7 +133,10 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         require(controller == _msgSender(), "NOT_CONTROLLER");
         _;
     }
-
+    modifier onlyOperator() {
+        require(operator[_msgSender()] == true, "NOT_OPERATOR");
+        _;
+    }
     /**
         Only Flashloan receiver can call
      */
@@ -168,16 +166,36 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         uint256 feeAmt,
         bytes calldata userData
     ) external override onlyReceiver {
-        (SrategyState curState,uint256 amountIn) = abi.decode(userData,(SrategyState,uint256));
+        (SrategyState curState,uint256 userValue) = abi.decode(userData,(SrategyState,uint256));
         require(curState != SrategyState.Normal, "NORMAL_STATE_CANT_CALL_THIS");
         address aave = IAavePool(IaavePool).aave();
         if (curState == SrategyState.Deposit) {
-            // Transfer baseAsset to Exchange
-            amountIn = amountIn+loanAmt;
-            baseAsset.safeTransfer(exchange, amountIn);
             // Swap baseAsset to depositAsset
-            uint256 minOut = IAavePool(IaavePool).convertAmount(address(baseAsset), address(depositAsset), amountIn*(magnifier-swapSlippage)/magnifier);
-            IExchange(exchange).swap(address(baseAsset),address(depositAsset),amountIn,minOut);
+            uint256 depoistAmt = IExchange(exchange).swap(address(baseAsset),address(depositAsset),userValue+loanAmt,0);
+    
+            IAave(aave).deposit(address(depositAsset), depoistAmt, address(this), 0);
+            if (IAavePool(IaavePool).getCollateral(address(this)) == 0) {
+                IAave(aave).setUserUseReserveAsCollateral(address(depositAsset), true);
+            }
+            // Repay flash loan
+            uint256 repay = loanAmt + feeAmt;
+            IAave(aave).borrow(address(baseAsset), repay, 2, 0, address(this));
+        } else if (curState == SrategyState.Withdraw) {
+            uint256 withdrawAmount = (loanAmt *
+                aDepositAsset.balanceOf(address(this))) / IAavePool(IaavePool).getDebt(address(this));
+
+            // Repay WETH to aave
+            IAave(aave).repay(address(baseAsset), loanAmt, 2, address(this));
+            IAave(aave).withdraw(address(depositAsset), withdrawAmount, address(this));
+
+            // Swap depositAsset to baseAsset
+            IExchange(exchange).swap(address(depositAsset),address(baseAsset),withdrawAmount,0);
+        }else if (curState == SrategyState.RaiseMLR) {
+            // Transfer baseAsset to Exchange
+            uint256 slippage = userValue;
+            uint256 minOut = IAavePool(IaavePool).convertAmount(address(baseAsset), address(depositAsset),loanAmt*(magnifier-slippage)/magnifier);
+            // Swap baseAsset to depositAsset
+            IExchange(exchange).swap(address(baseAsset),address(depositAsset),loanAmt,minOut);
     
             // Deposit depositAsset to AAVE
             uint256 depoistBalance = depositAsset.balanceOf(address(this));
@@ -189,22 +207,23 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
             // Repay flash loan
             uint256 repay = loanAmt + feeAmt;
             IAave(aave).borrow(address(baseAsset), repay, 2, 0, address(this));
-
-            baseAsset.safeTransfer(receiver, repay);
-        } else if (curState == SrategyState.Withdraw) {
-            uint256 withdrawAmount = (loanAmt *
-                aDepositAsset.balanceOf(address(this))) / IAavePool(IaavePool).getDebt(address(this));
-
-            // Repay WETH to aave
+        } else if (curState == SrategyState.ReduceMLR) {
+            uint256 slippage = userValue;
+            uint256 repayflash = loanAmt + feeAmt;
+            uint256 maxInput = IAavePool(IaavePool).convertAmount(address(baseAsset), address(depositAsset),repayflash*magnifier/(magnifier-slippage));
             IAave(aave).repay(address(baseAsset), loanAmt, 2, address(this));
+            uint256 withdrawAmount =IExchange(exchange).getCurveInputValue(address(depositAsset),address(baseAsset),repayflash,maxInput);
             IAave(aave).withdraw(address(depositAsset), withdrawAmount, address(this));
-
-            // Swap depositAsset to baseAsset
-            depositAsset.safeTransfer(exchange, withdrawAmount);
-            uint256 minOut = IAavePool(IaavePool).convertAmount(address(depositAsset), address(baseAsset), withdrawAmount*(magnifier-swapSlippage)/magnifier);
-            IExchange(exchange).swap(address(depositAsset),address(baseAsset),withdrawAmount,minOut);
-            // Repay Weth to receiver
-            baseAsset.safeTransfer(receiver, loanAmt + feeAmt);
+            uint256 minOut = IAavePool(IaavePool).convertAmount(address(depositAsset), address(baseAsset),withdrawAmount*(magnifier-slippage)/magnifier);
+            IExchange(exchange).swap(address(depositAsset),address(baseAsset),withdrawAmount,minOut);            // Repay Weth to receiver
+            uint256 balance = baseAsset.balanceOf(address(this)) - loanAmt - feeAmt;
+            uint256 debt = IAavePool(IaavePool).getDebt(address(this));
+            if(balance>debt){
+                balance = debt;
+            }
+            if(balance>0){
+                IAave(aave).repay(address(baseAsset), balance, 2, address(this));
+            }
         } else {
             revert("NOT_A_SS_STATE");
         }
@@ -270,9 +289,6 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
 
         // Deposited amt
         uint256 deposited = newAmt - prevAmt;
-        uint256 minOutput = (_amount * (magnifier - depositSlippage)) /
-            magnifier;
-        require(deposited >= minOutput, "DEPOSIT_SLIPPAGE_TOO_BIG");
         return deposited;
     }
 
@@ -287,19 +303,30 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         uint256 prevAmt = _totalAssets();
         require(_amount <= prevAmt, "INSUFFICIENT_ASSET");
 
-        uint256 loanAmt = (IAavePool(IaavePool).getDebt(address(this)) * _amount) / prevAmt;
-        IFlashloanReceiver(receiver).flashLoan(address(baseAsset), loanAmt,abi.encode(SrategyState.Withdraw,uint256(0)));
+        uint256 debt = IAavePool(IaavePool).getDebt(address(this));
 
-        uint256 toSend = baseAsset.balanceOf(address(this));
-        baseAsset.safeTransfer(controller, toSend);
+        if(debt>0){
+            uint256 preBalance = baseAsset.balanceOf(address(this));
+            uint256 loanAmt = (debt * _amount) / prevAmt;
+            IFlashloanReceiver(receiver).flashLoan(address(baseAsset), loanAmt,abi.encode(SrategyState.Withdraw,uint256(0)));
 
-        return toSend;
+            uint256 toSend = baseAsset.balanceOf(address(this))-preBalance;
+            return toSend;
+        }else{
+            address aave = IAavePool(IaavePool).aave();
+            uint256 withdrawAmount = (_amount * aDepositAsset.balanceOf(address(this))) / prevAmt;
+            //debt = 0
+            IAave(aave).withdraw(address(depositAsset), withdrawAmount, address(this));
+            // Swap depositAsset to baseAsset
+            return IExchange(exchange).swap(address(depositAsset),address(baseAsset),withdrawAmount,0);
+        }
+
     }
 
     /**
         Harvest reward token from convex booster
      */
-    function harvest() external onlyOwner collectFee {
+    function harvest() external onlyOperator collectFee {
     }
     function _calculateFee()internal view returns (uint256,uint256) {
         uint256 currentAssets = _realTotalAssets();
@@ -323,10 +350,44 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     }
 
 
+    function changeMLR(uint256 _mlr,uint256 swapSlippage) internal {
+        if (_mlr > mlr){
+            raiseMLR(_mlr, swapSlippage);
+        }else if(_mlr < mlr){
+            reduceMLR(_mlr, swapSlippage);
+        }
+
+    }
+    function raiseMLR(uint256 _mlr,uint256 swapSlippage)internal{
+        //flashloan = (mlr*a-b)/(1-mlr*s)
+        (uint256 coll,uint256 debt) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
+        uint256 debtNew = _mlr*coll;
+        debt = debt*magnifier;
+        if (debtNew>debt){
+            uint256 amount =(debtNew-debt)*magnifier/(magnifier*magnifier-_mlr*(magnifier-swapSlippage));
+            IFlashloanReceiver(receiver).flashLoan(address(baseAsset), amount,abi.encode(SrategyState.RaiseMLR,swapSlippage));
+        }
+        (uint256 coll1,uint256 debt1) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
+        emit LTVUpdate(debt/magnifier, coll, debt1, coll1);
+    }
+    function reduceMLR(uint256 _mlr,uint256 swapSlippage)internal{
+        //flashloan = (b-mlr*a)/(s-mlr)
+        (uint256 coll,uint256 debt) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
+        uint256 debtNew = _mlr*coll;
+        debt = debt*magnifier;
+        if (debtNew<debt){
+            uint256 amount =(debt-debtNew)/(magnifier-swapSlippage-_mlr);
+            IFlashloanReceiver(receiver).flashLoan(address(baseAsset), amount,abi.encode(SrategyState.ReduceMLR,swapSlippage));
+        }
+        (uint256 coll1,uint256 debt1) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
+        emit LTVUpdate(debt/magnifier, coll, debt1, coll1);
+    }
     /**
         Raise LTV
      */
-    function raiseLTV(uint256 lt) public onlyOwner {
+     /*
+    function raiseLTV(uint256 lt,uint256 swapSlippage) external onlyOwner {
+        //flashloan = mlr/(1-mlr)*collateral-1/(1-mlr)*debt
         (uint256 st,uint256 e) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
 
         require(e * magnifier < st * mlr, "NO_NEED_TO_RAISE");
@@ -355,11 +416,12 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         (uint256 st1,uint256 e1) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         emit LTVUpdate(e, st, e1, st1);
     }
-
+*/
     /**
         Reduce LTV
      */
-    function reduceLTV() public onlyOwner {
+     /*
+    function reduceLTV(uint256 swapSlippage) external onlyOwner {
         (uint256 st,uint256 e) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
 
         require(e * magnifier > st * mlr, "NO_NEED_TO_REDUCE");
@@ -379,7 +441,7 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
         IAave(aave).repay(address(baseAsset), baseBal, 2, address(this));
     }
 
-
+*/
 
     /**
         Check withdrawable status of required amount
@@ -404,17 +466,25 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     /**
         Set Controller
      */
-    function setController(address _controller) public onlyOwner {
+    function setController(address _controller) external onlyOwner {
+        require(controller == address(0), "CONTROLLER_ALREADY");
         require(_controller != address(0), "INVALID_ADDRESS");
         controller = _controller;
-
+        baseAsset.safeApprove(_controller,type(uint256).max);
         emit SetController(controller);
     }
-
+    /**
+        Set Operator
+     */
+    function setOperator(address _Operator, bool _isTrue) external onlyOwner {
+        require(_Operator != address(0), "INVALID_ADDRESS");
+        operator[_Operator]=_isTrue;
+        emit SetOperator(_Operator, _isTrue);
+    }
     /**
         Set Vault
      */
-    function setVault(address _vault) public onlyOwner {
+    function setVault(address _vault) external onlyOwner {
         require(_vault != address(0), "INVALID_ADDRESS");
         vault = _vault;
 
@@ -424,7 +494,7 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     /**
         Set Fee Pool
      */
-    function setFeePool(address _feePool) public onlyOwner {
+    function setFeePool(address _feePool) external onlyOwner {
         require(_feePool != address(0), "INVALID_ADDRESS");
         feePool = _feePool;
 
@@ -432,43 +502,9 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     }
 
     /**
-        Set Deposit Slipage
-     */
-    function setDepositSlippage(uint256 _slippage) public onlyOwner {
-        require(_slippage < magnifier, "INVALID_SLIPPAGE");
-
-        depositSlippage = _slippage;
-
-        emit SetDepositSlippage(depositSlippage);
-    }
-
-    /**
-        Set Withdraw Slipage
-     */
-    function setWithdrawSlippage(uint256 _slippage) public onlyOwner {
-        require(_slippage < magnifier, "INVALID_SLIPPAGE");
-
-        withdrawSlippage = _slippage;
-
-        emit SetWithdrawSlippage(withdrawSlippage);
-    }
-
-    /**
-        Set swap Slipage
-     */
-    function setSwapSlippage(uint256 _slippage) public onlyOwner {
-        require(_slippage < magnifier, "INVALID_SLIPPAGE");
-
-        swapSlippage = _slippage;
-
-        emit SetSwapSlippage(swapSlippage);
-    }
-
-
-    /**
         Set Max Deposit
      */
-    function setMaxDeposit(uint256 _maxDeposit) public onlyOwner {
+    function setMaxDeposit(uint256 _maxDeposit) external onlyOwner {
         require(_maxDeposit > 0, "INVALID_MAX_DEPOSIT");
         maxDeposit = _maxDeposit;
 
@@ -478,27 +514,35 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     /**
         Set Flashloan Receiver
      */
-    function setFlashLoanReceiver(address _receiver) public onlyOwner {
+    function setFlashLoanReceiver(address _receiver) external onlyOwner {
         require(_receiver != address(0), "INVALID_RECEIVER_ADDRESS");
+        if (receiver != address(0)){
+            baseAsset.safeApprove(receiver,0);
+        }
         receiver = _receiver;
-
+        baseAsset.safeApprove(_receiver,type(uint256).max);
         emit SetFlashloanReceiver(receiver);
     }
 
     /**
         Set Exchange
      */
-    function setExchange(address _exchange) public onlyOwner {
+    function setExchange(address _exchange) external onlyOwner {
         require(_exchange != address(0), "INVALID_ADDRESS");
+        if (exchange != address(0)){
+            baseAsset.safeApprove(exchange,0);
+            depositAsset.safeApprove(exchange,0);
+        }
         exchange = _exchange;
-
+        baseAsset.safeApprove(_exchange,type(uint256).max);
+        depositAsset.safeApprove(_exchange,type(uint256).max);
         emit SetExchange(exchange);
     }
 
     /**
         Set Fee Rate
      */
-    function setFeeRate(uint256 _rate) public collectFee onlyOwner {
+    function setFeeRate(uint256 _rate) external collectFee onlyOwner {
         require(_rate > 0, "INVALID_RATE");
 
         uint256 oldRate = feeRate;
@@ -510,9 +554,9 @@ contract ETHStrategy is Ownable, ISubStrategy, IETHLeverage {
     /**
         Set MLR
      */
-    function setMLR(uint256 _mlr) public onlyOwner {
+    function setMLR(uint256 _mlr,uint256 swapSlippage) external nonReentrant onlyOperator {
         require(_mlr > 0 && _mlr < magnifier, "INVALID_RATE");
-
+        changeMLR(_mlr,swapSlippage);
         uint256 oldMlr = mlr;
         mlr = _mlr;
 

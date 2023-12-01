@@ -69,7 +69,6 @@ contract ethController is IController, Ownable {
     ) external override onlyVault returns (uint256) {
         // Check input amount
         require(_amount > 0, "ZERO AMOUNT");
-
         uint256 depositAmt = _deposit(_amount);
         return depositAmt;
     }
@@ -87,24 +86,15 @@ contract ethController is IController, Ownable {
 
         // Todo: withdraw as much as possible
         withdrawAmt = ISubStrategy(subStrategy).withdraw(_amount);
-
-        if (withdrawAmt > 0) {
-            uint256 balance = asset.balanceOf(address(this));
-            require(
-                balance >= withdrawAmt,
-                "INVALID_WITHDRAWN_AMOUNT"
-            );
-
             // Pay Withdraw Fee to treasury and send rest to user
-            fee = (withdrawAmt * withdrawFee) / magnifier;
-            if (fee > 0) {
-                asset.safeTransfer(treasury, fee);
-            }
-
-            // Transfer withdrawn token to receiver
-            uint256 toReceive = withdrawAmt - fee;
-            asset.safeTransfer(_receiver, toReceive);
+        fee = (withdrawAmt * withdrawFee) / magnifier;
+        if (fee > 0) {
+            asset.safeTransferFrom(subStrategy,treasury, fee);
         }
+
+        // Transfer withdrawn token to receiver
+        uint256 toReceive = withdrawAmt - fee;
+        asset.safeTransferFrom(subStrategy,_receiver, toReceive);
     }
 
     /**
@@ -112,7 +102,7 @@ contract ethController is IController, Ownable {
      */
     function withdrawable(
         uint256 _amount
-    ) public view returns (uint256 withdrawAmt) {
+    ) external view returns (uint256 withdrawAmt) {
         if (_amount == 0) return 0;
 
         withdrawAmt = ISubStrategy(subStrategy).withdrawable(_amount);
@@ -129,7 +119,7 @@ contract ethController is IController, Ownable {
     //           SET CONFIGURATION          //
     //////////////////////////////////////////
 
-    function setVault(address _vault) public onlyOwner {
+    function setVault(address _vault) external onlyOwner {
         require(_vault != address(0), "INVALID_ADDRESS");
         vault = _vault;
 
@@ -139,7 +129,7 @@ contract ethController is IController, Ownable {
     /**
         Set fee pool address
      */
-    function setTreasury(address _treasury) public onlyOwner {
+    function setTreasury(address _treasury) external onlyOwner {
         require(_treasury != address(0), "ZERO_ADDRESS");
         treasury = _treasury;
 
@@ -149,7 +139,7 @@ contract ethController is IController, Ownable {
     /**
         Set withdraw fee
      */
-    function setWithdrawFee(uint256 _withdrawFee) public onlyOwner {
+    function setWithdrawFee(uint256 _withdrawFee) external onlyOwner {
         require(_withdrawFee < magnifier, "INVALID_WITHDRAW_FEE");
         withdrawFee = _withdrawFee;
 
@@ -170,7 +160,7 @@ contract ethController is IController, Ownable {
      */
     function _deposit(uint256 _amount) internal returns (uint256 depositAmt) {
             // Calls deposit function on SubStrategy
-        asset.safeTransfer( subStrategy, _amount);
+        asset.safeTransferFrom(vault, subStrategy, _amount);
         depositAmt = ISubStrategy(subStrategy).deposit(_amount);
     }
 }

@@ -77,27 +77,18 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
         maxWithdraw = type(uint256).max;
     }
 
-    function deposit(
-        uint256 amount,
-        address receiver
-    )
-        public
-        virtual
-        override
-        nonReentrant
-        unPaused
-        returns (uint256 shares)
+    function deposit(uint256 amount,uint256 minShares,address receiver)external virtual override nonReentrant unPaused returns (uint256 shares)
     {
         require(amount != 0, "ZERO_ASSETS");
         require(receiver != address(0), "ZERO_ADDRESS");
         require(amount <= maxDeposit, "EXCEED_ONE_TIME_MAX_DEPOSIT");
 
         // Need to transfer before minting or ERC777s could reenter.
-        IERC20(asset).safeTransferFrom(msg.sender, address(controller), amount);
+        IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
         // Total Assets amount until now
-        return _deposit(amount,receiver);
+        return _deposit(amount,minShares,receiver);
     }
-    function _deposit(uint256 amount,address receiver)internal returns (uint256 shares){
+    function _deposit(uint256 amount,uint256 minShares,address receiver)internal returns (uint256 shares){
         uint256 totalDeposit = IController(controller).totalAssets();
         uint256 total = totalSupply();
 
@@ -118,28 +109,17 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
                 totalDeposit,
                 Math.Rounding.Down
             );
-        require(shares != 0, "INVALID_DEPOSIT_SHARES");
+        require(shares != 0 && shares >= minShares, "INVALID_DEPOSIT_SHARES");
         // Mint INDEX token to receiver
         _mint(receiver, shares);
 
         emit Deposit(address(asset), msg.sender, receiver, amount, shares);
     }
-    function mint(
-        uint256 amount,
-        address account
-    ) external override onlyStrategy {
+    function mint(uint256 amount,address account) external override onlyStrategy {
         _mint(account, amount);
     }
 
-    function withdraw(
-        uint256 assets,
-        address receiver
-    )
-        public
-        virtual
-        nonReentrant
-        unPaused
-        returns (uint256 shares)
+    function withdraw(uint256 assets,uint256 minWithdraw,address receiver)external virtual nonReentrant unPaused returns (uint256 shares)
     {
         require(assets != 0, "ZERO_ASSETS");
         require(receiver != address(0), "ZERO_ADDRESS");
@@ -150,18 +130,10 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
             IController(controller).totalAssets();
 
         require(shares > 0, "INVALID_WITHDRAW_SHARES");
-        _withdraw(assets, shares, receiver);
+        _withdraw(assets, shares,minWithdraw, receiver);
     }
 
-    function redeem(
-        uint256 shares,
-        address receiver
-    )
-        public
-        virtual
-        nonReentrant
-        unPaused
-        returns (uint256 assets)
+    function redeem(uint256 shares,uint256 minWithdraw, address receiver) external virtual nonReentrant unPaused returns (uint256 assets)
     {
         require(shares != 0, "ZERO_SHARES");
         require(receiver != address(0), "ZERO_ADDRESS");
@@ -172,14 +144,14 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
         require(assets <= maxWithdraw, "EXCEED_ONE_TIME_MAX_WITHDRAW");
 
         // Withdraw asset
-        _withdraw(assets, shares, receiver);
+        _withdraw(assets, shares,minWithdraw, receiver);
     }
 
     function totalAssets() public view virtual returns (uint256) {
         return IController(controller).totalAssets();
     }
 
-    function assetsPerShare() public view returns (uint256) {
+    function assetsPerShare() external view returns (uint256) {
         return IController(controller).totalAssets()*1e18 / totalSupply();
     }
 
@@ -204,24 +176,25 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
     ///////////////////////////////////////////////////////////////
 
 
-    function setMaxDeposit(uint256 _maxDeposit) public onlyOwner {
+    function setMaxDeposit(uint256 _maxDeposit) external onlyOwner {
         require(_maxDeposit > 0, "INVALID_MAX_DEPOSIT");
         maxDeposit = _maxDeposit;
 
         emit SetMaxDeposit(maxDeposit);
     }
 
-    function setMaxWithdraw(uint256 _maxWithdraw) public onlyOwner {
+    function setMaxWithdraw(uint256 _maxWithdraw) external onlyOwner {
         require(_maxWithdraw > 0, "INVALID_MAX_WITHDRAW");
         maxWithdraw = _maxWithdraw;
 
         emit SetMaxWithdraw(maxWithdraw);
     }
 
-    function setController(address _controller) public onlyOwner {
+    function setController(address _controller) external onlyOwner {
+        require(controller == address(0), "CONTROLLER_ALREADY");
         require(_controller != address(0), "INVALID_ZERO_ADDRESS");
         controller = _controller;
-
+        IERC20(asset).safeApprove(_controller,type(uint256).max);
         emit SetController(controller);
     }
 
@@ -229,12 +202,12 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
     //                      PAUSE/RESUME                              //
     ////////////////////////////////////////////////////////////////////
 
-    function pause() public onlyOwner {
+    function pause() external onlyOwner {
         require(!paused, "CURRENTLY_PAUSED");
         paused = true;
     }
 
-    function resume() public onlyOwner {
+    function resume() external onlyOwner {
         require(paused, "CURRENTLY_RUNNING");
         paused = false;
     }
@@ -243,18 +216,14 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
     //                      INTERNAL                                  //
     ////////////////////////////////////////////////////////////////////
 
-    function _withdraw(
-        uint256 assets,
-        uint256 shares,
-        address receiver
-    ) internal returns(uint256) {
+    function _withdraw(uint256 assets,uint256 shares,uint256 minWithdraw,address receiver) internal returns(uint256) {
         require(shares != 0, "SHARES_TOO_LOW");
         // Calls Withdraw function on controller
         (uint256 withdrawn, uint256 fee) = IController(controller).withdraw(
             assets,
             receiver
         );
-        require(withdrawn > 0, "INVALID_WITHDRAWN_SHARES");
+        require(withdrawn > 0 && withdrawn-fee > minWithdraw, "INVALID_WITHDRAWN_SHARES");
 
         // Burn shares amount
         _burn(msg.sender, shares);
@@ -263,7 +232,7 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
             address(asset),
             msg.sender,
             receiver,
-            assets,
+            withdrawn,
             shares,
             fee
         );

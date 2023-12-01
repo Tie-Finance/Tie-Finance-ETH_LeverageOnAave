@@ -10,6 +10,7 @@ import "../interfaces/IETHLeverage.sol";
 
 contract BalancerReceiver is IFlashloanReceiver {
 
+    using SafeERC20 for IERC20;
     // Balancer V2 Vault
     address public balancer;
 
@@ -82,18 +83,11 @@ contract BalancerReceiver is IFlashloanReceiver {
         IERC20 token = tokens[0];
         uint256 loanAmt = amounts[0];
         uint256 feeAmt = feeAmounts[0];
-
-        // Transfer Loan Token to ETH Leverage SS
-        SafeERC20.safeTransfer(token, subStrategy, loanAmt);
-
+        token.safeTransfer(subStrategy, loanAmt);
         // Call Loan Fallback function in SS
         IETHLeverage(subStrategy).loanFallback(loanAmt, feeAmt,userData);
 
         // Pay back flash loan
-        require(
-            token.balanceOf(address(this)) >= loanAmt + feeAmt,
-            "INSUFFICIENT_REFUND"
-        );
-        SafeERC20.safeTransfer(token, balancer, loanAmt + feeAmt);
+        token.safeTransferFrom(subStrategy, balancer, loanAmt + feeAmt);
     }
 }

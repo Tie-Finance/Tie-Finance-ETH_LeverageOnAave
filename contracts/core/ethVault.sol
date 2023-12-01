@@ -12,14 +12,7 @@ contract ethVault is Vault {
     ) Vault(_asset,_name, _symbol) {
     }
 
-    function depositEth(
-        address receiver
-    )
-        public
-        payable
-        nonReentrant
-        unPaused
-        returns (uint256 shares)
+    function depositEth(uint256 minShares,address receiver) external payable nonReentrant unPaused returns (uint256 shares)
     {
         uint256 amount = msg.value;
         require(amount != 0, "ZERO_ASSETS");
@@ -27,20 +20,11 @@ contract ethVault is Vault {
         require(amount <= maxDeposit, "EXCEED_ONE_TIME_MAX_DEPOSIT");
         IWeth(address(asset)).deposit{value:amount}();
 
-        // Need to transfer before minting or ERC777s could reenter.
-        IERC20(asset).safeTransfer(address(controller), amount);
         // Total Assets amount until now
-        return _deposit(amount,receiver);
+        return _deposit(amount,minShares,receiver);
     }
 
-    function withdrawEth(
-        uint256 assets,
-        address payable receiver
-    )
-        public
-        nonReentrant
-        unPaused
-        returns (uint256 shares)
+    function withdrawEth(uint256 assets,uint256 minWithdraw,address payable receiver) external nonReentrant unPaused returns (uint256 shares)
     {
         require(assets != 0, "ZERO_ASSETS");
         require(receiver != address(0), "ZERO_ADDRESS");
@@ -53,19 +37,12 @@ contract ethVault is Vault {
         require(shares > 0, "INVALID_WITHDRAW_SHARES");
         require(balanceOf(msg.sender) >= shares, "EXCEED_TOTAL_DEPOSIT");
 
-        uint256 amount = _withdraw(assets, shares, address(this));
+        uint256 amount = _withdraw(assets, shares,minWithdraw, address(this));
         IWeth(address(asset)).withdraw(amount);
         receiver.transfer(amount);
     }
 
-    function redeemEth(
-        uint256 shares,
-        address payable receiver
-    )
-        public
-        nonReentrant
-        unPaused
-        returns (uint256 assets)
+    function redeemEth(uint256 shares,uint256 minWithdraw,address payable receiver) external nonReentrant unPaused returns (uint256 assets)
     {
         require(shares != 0, "ZERO_SHARES");
         require(receiver != address(0), "ZERO_ADDRESS");
@@ -78,7 +55,7 @@ contract ethVault is Vault {
         require(assets <= maxWithdraw, "EXCEED_ONE_TIME_MAX_WITHDRAW");
 
         // Withdraw asset
-        uint256 amount = _withdraw(assets, shares, address(this));
+        uint256 amount = _withdraw(assets, shares,minWithdraw, address(this));
         IWeth(address(asset)).withdraw(amount);
         receiver.transfer(amount);
     }

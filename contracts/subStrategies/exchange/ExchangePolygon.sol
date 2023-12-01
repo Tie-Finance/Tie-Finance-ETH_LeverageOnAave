@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "../interfaces/ICurve.sol";
+import "../interfaces/ICurvePolygon.sol";
 import "../interfaces/IStETH.sol";
 import "../interfaces/IExchange.sol";
 import "../interfaces/IWeth.sol";
@@ -38,11 +38,13 @@ contract ETHLeverExchangePolygon is IExchange {
         require(msg.sender == leverSS, "ONLY_LEVER_VAULT_CALL");
         _;
     }
-    function swap(address tokenIn,address tokenOut,uint256 amount,uint256 minAmount) external override onlyLeverSS {
+    function swap(address tokenIn,address tokenOut,uint256 amount,uint256 minAmount) external override onlyLeverSS returns(uint256) {
+        IERC20(tokenIn).safeTransferFrom(leverSS,address(this),amount);
         if (tokenIn == weth){
             if (tokenOut ==  stETH){
                 uint256 balance = swapEthToStEth(amount,minAmount);
                 IERC20(tokenOut).safeTransfer(leverSS, balance);
+                return balance;
             }else{
                 require(false,"INVALID_SWAP");
             }
@@ -50,6 +52,7 @@ contract ETHLeverExchangePolygon is IExchange {
             if (tokenIn ==  stETH){
                 uint256 balance = swapSTEthToEth(amount,minAmount);
                 IERC20(tokenOut).safeTransfer(leverSS, balance);
+                return balance;
             }
         }else{
             require(false,"INVALID_SWAP");
@@ -62,7 +65,7 @@ contract ETHLeverExchangePolygon is IExchange {
         0 : stMatic
         1 : matic
         */
-        return ICurve(curvePool).exchange{value: amount}(
+        return ICurvePolygon(curvePool).exchange{value: amount}(
             1,
             0,
             amount,
@@ -71,8 +74,16 @@ contract ETHLeverExchangePolygon is IExchange {
         );
     }
     function swapSTEthToEth(uint256 amount,uint256 minAmount) internal returns(uint256){
-        uint256 balance = ICurve(curvePool).exchange(0, 1, amount, minAmount,true);
+        uint256 balance = ICurvePolygon(curvePool).exchange(0, 1, amount, minAmount,true);
         IWeth(weth).deposit{value: balance}();
         return balance;
+    }
+    function getCurveInputValue(address tokenIn,address tokenOut,uint256 outAmount,uint256 maxInput)external view override onlyLeverSS returns (uint256){
+        if(tokenIn == stETH && tokenOut == weth){
+            uint256 curveOut = ICurvePolygon(curvePool).get_dy(0, 1, maxInput);
+            return outAmount*maxInput/curveOut+1;
+        }else{
+            require(false,"INVALID_SWAP");
+        }
     }
 }
