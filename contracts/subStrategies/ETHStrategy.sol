@@ -122,6 +122,8 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         address aave = IAavePool(_IaavePool).aave();
         baseAsset.safeApprove(aave, type(uint256).max);
         depositAsset.safeApprove(aave, type(uint256).max);
+        IAave(aave).setUserEMode(1);
+        
     }
 
     receive() external payable {}

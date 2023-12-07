@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 interface IAave {
+    function setUserEMode(uint8 categoryId) external;
     function borrow(
         address asset,
         uint256 amount,
