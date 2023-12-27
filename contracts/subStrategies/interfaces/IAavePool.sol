@@ -6,9 +6,9 @@ interface IAavePool {
     function getCollateral(address _user) external view returns (uint256);
     function getDebt(address _user) external view returns (uint256);
     function getCollateralAndDebt(address _user)external view returns (uint256 _collateral, uint256 _debt);
-    function getCollateralTo(address _user,address _token,uint256 _decimals) external view returns (uint256);
+    function getCollateralTo(address _user,address _token) external view returns (uint256);
 
-    function getDebtTo(address _user,address _token,uint256 _decimals) external view returns (uint256);
-    function getCollateralAndDebtTo(address _user,address _token,uint256 _decimals)external view returns (uint256 _collateral, uint256 _debt);
+    function getDebtTo(address _user,address _token) external view returns (uint256);
+    function getCollateralAndDebtTo(address _user,address _token)external view returns (uint256 _collateral, uint256 _debt);
 
 }
