@@ -13,7 +13,7 @@ import "./interfaces/IUniExchange.sol";
 import "../interfaces/ISubStrategy.sol";
 import "../interfaces/IVault.sol";
 
-contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
+contract lendingStrategy is operatorMap, ISubStrategy {
     using SafeERC20 for IERC20;
 
     // Sub Strategy name
@@ -32,7 +32,7 @@ contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
     // Constant magnifier
     uint256 public constant magnifier = 10000;
 
-    uint256 public feeRate = 1000;
+    uint256 public feeRate = 500;
 
     uint256 public lastCollateral;
 
@@ -53,9 +53,6 @@ contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
     // Max Loan Ratio
     uint256 public mlr;
 
-    // Fee Ratio
-    uint256 public feeRatio;
-
     // Fee Collector
     address public feePool;
 
@@ -71,8 +68,6 @@ contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
     event SetController(address controller);
 
     event SetFeePool(address _feePool);
-
-    event SetFeeRatio(uint256 feeRatio);
 
     event SetVault(address vault);
 
@@ -98,8 +93,7 @@ contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
         address _IaavePool,
         address _vault,
         address _ethLeverage,
-        address _feePool,
-        uint256 _feeRatio
+        address _feePool
     ) {
         mlr = _mlr;
         depositAsset = _depoistAsset;
@@ -110,7 +104,6 @@ contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
         ethLeverage = _ethLeverage;
 
         feePool = _feePool;
-        feeRatio = _feeRatio;
 
         // Set Max Deposit as max uin256
         maxDeposit = type(uint256).max;
@@ -192,10 +185,11 @@ contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
     /**
         Set Controller
      */
-    function setController(address _controller) public onlyOwner {
+    function setController(address _controller) external onlyOwner {
+        require(controller == address(0), "CONTROLLER_ALREADY");
         require(_controller != address(0), "INVALID_ADDRESS");
         controller = _controller;
-
+        depositAsset.safeApprove(_controller,type(uint256).max);
         emit SetController(controller);
     }
 
@@ -219,17 +213,6 @@ contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
         emit SetFeePool(feePool);
     }
 
-    /**
-        Set Fee Ratio
-     */
-    function setFeeRatio(uint256 _feeRatio) public onlyOwner {
-        require(_feeRatio < magnifier && _feeRatio > 0, "INVALID_FEE_RATIO");
-
-        feeRatio = _feeRatio;
-
-        emit SetFeeRatio(feeRatio);
-    }
-
 
     /**
         Set Max Deposit
@@ -245,7 +228,7 @@ contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
         Set MLR
      */
     function setMLR(uint256 _mlr,uint256 slipPage) public onlyOperator {
-        require(_mlr > 0 && _mlr < magnifier, "INVALID_RATE");
+        require(_mlr < magnifier, "INVALID_RATE");
 
         uint256 oldMlr = mlr;
         mlr = _mlr;
@@ -272,7 +255,9 @@ contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
         IAave(aave).borrow(weth, x, 2, 0, address(this));
         uint256 wethAmt = IERC20(weth).balanceOf(address(this));
         uint256 minShares = IVault(ethLeverage).convertToShares(wethAmt)*(magnifier-slipPage)/magnifier;
-        IVault(ethLeverage).deposit(wethAmt,minShares,address(this));
+        if(minShares>0){
+            IVault(ethLeverage).deposit(wethAmt,minShares,address(this));
+        }
 
         // Deposit ETH to ETH Leverage
         (uint256 st1,uint256 e1) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
@@ -415,9 +400,11 @@ contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
         }
 
         // Borrow ETH from AAVE
-        IAave(aave).borrow(weth, ethToBorrow, 2, 0, address(this));
-        // Deposit to ETH Leverage SS
-        IVault(ethLeverage).deposit(ethToBorrow,0, address(this));
+        if (ethToBorrow>0){
+            IAave(aave).borrow(weth, ethToBorrow, 2, 0, address(this));
+            // Deposit to ETH Leverage SS
+            IVault(ethLeverage).deposit(ethToBorrow,1, address(this));
+        }
 
         // Get new total assets amount
         uint256 newAmt = _totalAssets();
@@ -447,31 +434,47 @@ contract lendingStrategy is Ownable,operatorMap, ISubStrategy {
 
         // Withdraw WBTC from AAVE
         uint256 ethDebt = (IAavePool(IaavePool).getDebt(address(this)) * _amount) / IAavePool(IaavePool).getCollateralTo(address(this),address(depositAsset));
-        bool bSufficient = ethWithdrawn >= ethDebt;
-        if (bSufficient) {
-            IAave(aave).repay(weth, ethDebt, 2, address(this));
+        if (ethWithdrawn >= ethDebt) {
+            if(ethDebt>0){
+                IAave(aave).repay(weth, ethDebt, 2, address(this));
+            }
+            uint256 swapAmount = 0;
+            if(ethWithdrawn > ethDebt){
+                swapAmount = IUniExchange(exchange).swapExactInput(
+                    weth,
+                    address(depositAsset),
+                    ethWithdrawn - ethDebt,
+                    0
+                );
+            }
+            IAave(aave).withdraw(address(depositAsset), _amount, address(this));
+            _amount += swapAmount;
         }else{
             IAave(aave).repay(weth, ethWithdrawn, 2, address(this));
+            uint256 witdrawAmt = IAavePool(IaavePool).getCollateralMaxWithdrawTo(address(this), address(depositAsset));
+            if (witdrawAmt>= _amount){
+                IAave(aave).withdraw(address(depositAsset), _amount, address(this));
+                uint256 swapAmount = IUniExchange(exchange).swapExactOutput(
+                    address(depositAsset),
+                    weth,
+                    ethDebt - ethWithdrawn,
+                    _amount
+                );
+                IAave(aave).repay(weth, ethDebt - ethWithdrawn, 2, address(this));
+                _amount -= swapAmount;
+            }else{
+                IAave(aave).withdraw(address(depositAsset), witdrawAmt, address(this));
+                uint256 swapAmount = IUniExchange(exchange).swapExactOutput(
+                    address(depositAsset),
+                    weth,
+                    ethDebt - ethWithdrawn,
+                    witdrawAmt
+                );
+                IAave(aave).repay(weth, ethDebt - ethWithdrawn, 2, address(this));
+                IAave(aave).withdraw(address(depositAsset), _amount-witdrawAmt, address(this));
+                _amount -= swapAmount;
+            }
         }
-        IAave(aave).withdraw(address(depositAsset), _amount, address(this));
-        if(bSufficient){
-                _amount+=IUniExchange(exchange).swapExactInput(
-                weth,
-                address(depositAsset),
-                ethWithdrawn - ethDebt,
-                0
-            );
-        }else{
-            uint256 swapAmount = IUniExchange(exchange).swapExactOutput(
-                address(depositAsset),
-                weth,
-                ethDebt - ethWithdrawn,
-                _amount
-            );
-            IAave(aave).repay(weth, ethDebt - ethWithdrawn, 2, address(this));
-            _amount -= swapAmount;
-        }
-
         return _amount;
     }
 }

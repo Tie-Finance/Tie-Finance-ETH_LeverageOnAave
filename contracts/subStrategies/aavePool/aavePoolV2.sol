@@ -33,11 +33,15 @@ contract aavePoolV2 {
     function getCollateralAndDebt(address _user)external view returns (uint256 _collateral, uint256 _debt) {
         (_collateral, _debt, , , , ) = IAave(aave).getUserAccountData(_user);
     }
+    function getCollateralMaxWithdraw(address _user) external view returns (uint256) {
+        (uint256 _collateral, uint256 _debt,uint256  _available, , , ) = IAave(aave).getUserAccountData(_user);
+        return _collateral*_available/(_available+_debt)*99/100;
+    }
     function getCollateralTo(address _user,address _token) external view returns (uint256) {
         (uint256 c, , , , , ) = IAave(aave).getUserAccountData(_user);
         uint256 price = IAaveOracle(aaveOracle).getAssetPrice(_token);
         uint8 _decimals = IERC20Metadata(_token).decimals();
-        return c*_decimals/price;
+        return c*(10**_decimals)/price;
     }
 
     function getDebtTo(address _user,address _token) external view returns (uint256) {
@@ -45,14 +49,20 @@ contract aavePoolV2 {
         (, uint256 d, , , , ) = IAave(aave).getUserAccountData(_user);
         uint256 price = IAaveOracle(aaveOracle).getAssetPrice(_token);
         uint8 _decimals = IERC20Metadata(_token).decimals();
-        return d*_decimals/price;
+        return d*(10**_decimals)/price;
     }
     function getCollateralAndDebtTo(address _user,address _token)external view returns (uint256 _collateral, uint256 _debt) {
         (_collateral, _debt, , , , ) = IAave(aave).getUserAccountData(_user);
         uint256 price = IAaveOracle(aaveOracle).getAssetPrice(_token);
         uint8 _decimals = IERC20Metadata(_token).decimals();
-        _collateral =  _collateral*_decimals/price;
-        _debt =  _debt*_decimals/price;
+        _collateral =  _collateral*(10**_decimals)/price;
+        _debt =  _debt*(10**_decimals)/price;
     }
-
+    function getCollateralMaxWithdrawTo(address _user,address _token) public view returns (uint256) {
+        (uint256 _collateral, uint256 _debt,uint256  _available, , , ) = IAave(aave).getUserAccountData(_user);
+        uint256 amount = _collateral*_available/(_available+_debt)*99/100;
+        uint256 price = IAaveOracle(aaveOracle).getAssetPrice(_token);
+        uint8 _decimals = IERC20Metadata(_token).decimals();
+        return amount*(10**_decimals)/price;
+    }
 }
