@@ -273,12 +273,19 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         require(e * magnifier > st * mlr, "NO_NEED_TO_REDUCE");
 
         uint256 x = (e - (mlr * st) / magnifier);
-        uint256 toWithdraw = (x * magnifier) / (magnifier - slipPage);
 
+        uint256 toWithdraw = (x * magnifier) / (magnifier - slipPage);
+        uint256 shares = IVault(ethLeverage).convertToShares(toWithdraw);
+        uint256 balance = IERC20(ethLeverage).balanceOf(address(this));
+        uint256 minWithdraw = x;
+        if ( shares> balance){
+            toWithdraw = IVault(ethLeverage).convertToAssets(balance);
+            minWithdraw = toWithdraw*(magnifier-slipPage)/magnifier;
+        }
         // Withdraw ETH from Leverage
-        IVault(ethLeverage).withdraw(toWithdraw,x, address(this));
+        IVault(ethLeverage).withdraw(toWithdraw,minWithdraw, address(this));
         uint256 wethAmt = IERC20(weth).balanceOf(address(this));
-        require(wethAmt >= x, "ETH withdrawn not enough");
+        //require(wethAmt >= x, "ETH withdrawn not enough");
 
         // Deposit exceed ETH
         if(wethAmt>x){
@@ -287,6 +294,8 @@ contract lendingStrategy is operatorMap, ISubStrategy {
             if(minShares>0){
                 IVault(ethLeverage).deposit(depositAmt,minShares,address(this));
             }
+        }else if(wethAmt<x){
+            x = wethAmt;
         }
 
         address aave = IAavePool(IaavePool).aave();
@@ -428,7 +437,9 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         uint256 ethBefore = IERC20(weth).balanceOf(address(this));
 
         // Withdraw ETH from ETH Leverage
-        IVault(ethLeverage).withdraw(ethWithdraw,0, address(this));
+        if(ethWithdraw>0){
+            IVault(ethLeverage).withdraw(ethWithdraw,0, address(this));
+        }
 
         uint256 ethWithdrawn = IERC20(weth).balanceOf(address(this)) - ethBefore;
 
@@ -450,7 +461,9 @@ contract lendingStrategy is operatorMap, ISubStrategy {
             IAave(aave).withdraw(address(depositAsset), _amount, address(this));
             _amount += swapAmount;
         }else{
-            IAave(aave).repay(weth, ethWithdrawn, 2, address(this));
+            if(ethWithdrawn>0){
+                IAave(aave).repay(weth, ethWithdrawn, 2, address(this));
+            }
             uint256 witdrawAmt = IAavePool(IaavePool).getCollateralMaxWithdrawTo(address(this), address(depositAsset));
             if (witdrawAmt>= _amount){
                 IAave(aave).withdraw(address(depositAsset), _amount, address(this));
