@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./operator.sol";
 import "./interfaces/IWeth.sol";
@@ -26,7 +27,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
     address public vault;
 
     // ETH Leverage address
-    address public ethLeverage;
+    address immutable public ethLeverage;
 
 
     // Constant magnifier
@@ -38,13 +39,13 @@ contract lendingStrategy is operatorMap, ISubStrategy {
 
 
     // WETH Address
-    address public weth;
+    address immutable public weth;
 
     // deposit asset into aave pool
-    IERC20 public depositAsset;
+    IERC20 immutable public depositAsset;
 
     // aave address
-    address public IaavePool;
+    address immutable public IaavePool;
 
     // Max Deposit
     uint256 public override maxDeposit;
@@ -61,9 +62,6 @@ contract lendingStrategy is operatorMap, ISubStrategy {
 
     bool internal harvested = false;
 
-
-
-    event Harvest(uint256 prevTotal, uint256 newTotal);
 
     event SetController(address controller);
 
@@ -87,7 +85,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
     event SetFeeRate(uint256 oldRate, uint256 newRate);
 
     constructor(
-        IERC20 _depoistAsset,
+        IERC20 _depositAsset,
         address _weth,
         uint256 _mlr,
         address _IaavePool,
@@ -95,8 +93,15 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         address _ethLeverage,
         address _feePool
     ) {
+        require(_weth != address(0), "INVALID_ADDRESS");
+        require(_IaavePool != address(0), "INVALID_ADDRESS");
+        require(_feePool != address(0), "INVALID_ADDRESS");
+        require(_ethLeverage != address(0), "INVALID_ADDRESS");
+        require(_vault != address(0), "INVALID_ADDRESS");
+        require(_mlr < magnifier, "INVALID_RATE");
+
         mlr = _mlr;
-        depositAsset = _depoistAsset;
+        depositAsset = _depositAsset;
         weth = _weth;
         IaavePool = _IaavePool;
 
@@ -105,10 +110,10 @@ contract lendingStrategy is operatorMap, ISubStrategy {
 
         feePool = _feePool;
 
-        // Set Max Deposit as max uin256
+        // Set Max Deposit as max uint256
         maxDeposit = type(uint256).max;
         address aave = IAavePool(_IaavePool).aave();
-        _depoistAsset.safeApprove(aave, type(uint256).max);
+        _depositAsset.safeApprove(_IaavePool, type(uint256).max);
         IERC20(_weth).safeApprove(aave, type(uint256).max);
         IERC20(_weth).safeApprove(_ethLeverage, type(uint256).max);
 
@@ -164,7 +169,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
 
 
     /**
-        Check withdrawable status of required amount
+        get withdrawable amount of required amount
      */
     function withdrawable(
         uint256 _amount
@@ -266,7 +271,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
     }
 
     /**
-        Reduce LTV
+        Reduce Mlr
      */
     function reduceMlr(uint256 st,uint256 e,uint256 slipPage) internal {
 
@@ -310,6 +315,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
      */
     function setExchange(address _exchange) external onlyOwner {
         require(_exchange != address(0), "INVALID_ADDRESS");
+        require(_exchange != address(0), "INVALID_ADDRESS");
         if (exchange != address(0)){
             depositAsset.safeApprove(exchange,0);
             IERC20(weth).safeApprove(exchange,0);
@@ -346,7 +352,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
     }
     function _realTotalAssets() internal view returns (uint256) {
         (uint256 _collateral,uint256 _debt) = IAavePool(IaavePool).getCollateralAndDebtTo(address(this),address(depositAsset));
-        return _collateral-_debt+IAavePool(IaavePool).convertAmount(weth,address(depositAsset),_totalETH());
+        return _collateral+IAavePool(IaavePool).convertAmount(weth,address(depositAsset),_totalETH())-_debt;
     } 
     //
     function _calculateFee()internal view returns (uint256,uint256) {
@@ -394,7 +400,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         address aave = IAavePool(IaavePool).aave();
 
         // Deposit WBTC
-        IAave(aave).deposit(address(depositAsset), _amount, address(this), 0);
+        IAavePool(IaavePool).deposit(address(depositAsset), _amount);
 
         if (col == 0) {
             IAave(aave).setUserUseReserveAsCollateral(address(depositAsset), true);
@@ -444,7 +450,8 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         uint256 ethWithdrawn = IERC20(weth).balanceOf(address(this)) - ethBefore;
 
         // Withdraw WBTC from AAVE
-        uint256 ethDebt = (IAavePool(IaavePool).getDebt(address(this)) * _amount) / IAavePool(IaavePool).getCollateralTo(address(this),address(depositAsset));
+        uint256 ethDebt = Math.ceilDiv((IAavePool(IaavePool).getDebt(address(this)) * _amount),
+            IAavePool(IaavePool).getCollateralTo(address(this),address(depositAsset)));
         if (ethWithdrawn >= ethDebt) {
             if(ethDebt>0){
                 IAave(aave).repay(weth, ethDebt, 2, address(this));

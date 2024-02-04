@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 interface IAavePool {
+    function aaveVersion() external view returns (uint256);
+    function deposit(address asset,uint256 amount)external;
     function aave() external view returns (address);
     function convertAmount(address _tokenIn,address _tokenOut,uint256 _amount) external view returns (uint256);
     function getCollateral(address _user) external view returns (uint256);

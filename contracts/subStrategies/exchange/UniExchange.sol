@@ -6,11 +6,12 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../interfaces/IUniswapV3Router.sol";
 import "../interfaces/IWeth.sol";
+import "../interfaces/IUniExchange.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract UniExchange is Ownable {
+contract UniExchange is IUniExchange,Ownable {
     using SafeERC20 for IERC20;
-    address public leverSS;
+    address immutable public leverSS;
 
     address public univ3Router;
 
@@ -18,16 +19,17 @@ contract UniExchange is Ownable {
     uint24 public univ3Fee;
 
     // WETH Address
-    address public weth;
+    address immutable public weth;
 
     constructor(address _weth, address _leverSS, address _univ3Router,uint24 _univ3Fee) {
+        require(_weth != address(0), "INVALID_ADDRESS");
+        require(_leverSS != address(0), "INVALID_ADDRESS");
+        require(_univ3Router != address(0), "INVALID_ADDRESS");
         weth = _weth;
         leverSS = _leverSS;
         univ3Router = _univ3Router;
         univ3Fee = _univ3Fee;
     }
-
-    receive() external payable {}
 
     event SetSwapInfo(address router, uint24 fee);
 

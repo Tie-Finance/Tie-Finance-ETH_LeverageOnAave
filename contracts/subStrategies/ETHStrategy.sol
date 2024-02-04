@@ -105,7 +105,8 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         uint256 _mlr,
         address _IaavePool,
         address _vault,
-        address _feePool
+        address _feePool,
+        uint8 _emode
     ) {
         mlr = _mlr;
         baseAsset = _baseAsset;
@@ -121,9 +122,10 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         maxDeposit = type(uint256).max;
         address aave = IAavePool(_IaavePool).aave();
         baseAsset.safeApprove(aave, type(uint256).max);
-        depositAsset.safeApprove(aave, type(uint256).max);
-        IAave(aave).setUserEMode(1);
-        
+        depositAsset.safeApprove(_IaavePool, type(uint256).max);
+        if(IAavePool(_IaavePool).aaveVersion() == 3){
+            IAave(aave).setUserEMode(_emode);
+        }    
     }
 
     receive() external payable {}
@@ -175,7 +177,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
             // Swap baseAsset to depositAsset
             uint256 depoistAmt = IExchange(exchange).swap(address(baseAsset),address(depositAsset),userValue+loanAmt,0);
     
-            IAave(aave).deposit(address(depositAsset), depoistAmt, address(this), 0);
+            IAavePool(IaavePool).deposit(address(depositAsset), depoistAmt);
             if (IAavePool(IaavePool).getCollateral(address(this)) == 0) {
                 IAave(aave).setUserUseReserveAsCollateral(address(depositAsset), true);
             }
@@ -202,7 +204,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
             // Deposit depositAsset to AAVE
             uint256 depoistBalance = depositAsset.balanceOf(address(this));
 
-            IAave(aave).deposit(address(depositAsset), depoistBalance, address(this), 0);
+            IAavePool(IaavePool).deposit(address(depositAsset), depoistBalance);
             if (IAavePool(IaavePool).getCollateral(address(this)) == 0) {
                 IAave(aave).setUserUseReserveAsCollateral(address(depositAsset), true);
             }
@@ -414,7 +416,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         // Deposit STETH to AAVE
         uint256 depositAmt = depositAsset.balanceOf(address(this));
 
-        IAave(aave).deposit(address(depositAsset), depositAmt, address(this), 0);
+        IAavePool(IaavePool).deposit(address(depositAsset), depositAmt);
         (uint256 st1,uint256 e1) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         emit LTVUpdate(e, st, e1, st1);
     }
