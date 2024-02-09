@@ -315,7 +315,6 @@ contract lendingStrategy is operatorMap, ISubStrategy {
      */
     function setExchange(address _exchange) external onlyOwner {
         require(_exchange != address(0), "INVALID_ADDRESS");
-        require(_exchange != address(0), "INVALID_ADDRESS");
         if (exchange != address(0)){
             depositAsset.safeApprove(exchange,0);
             IERC20(weth).safeApprove(exchange,0);
