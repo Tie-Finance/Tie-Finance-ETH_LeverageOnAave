@@ -57,7 +57,7 @@ contract aavePoolV2 is IAavePool,saveApprove,operatorMap{
     }
     function getCollateralMaxWithdraw(address _user) external view returns (uint256) {
         (uint256 _collateral, uint256 _debt,uint256  _available, , , ) = IAave(aave).getUserAccountData(_user);
-        return _collateral*_available/(_available+_debt)*99/100;
+        return _collateral*_available/(_available+_debt);
     }
     function getCollateralTo(address _user,address _token) external view returns (uint256) {
         (uint256 c, , , , , ) = IAave(aave).getUserAccountData(_user);
