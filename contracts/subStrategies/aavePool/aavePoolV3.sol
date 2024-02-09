@@ -21,9 +21,6 @@ contract aavePoolV3 is IAavePool,saveApprove,operatorMap{
         aaveOracle = _aaveOracle;
         weth = _weth;
     }
-    function aaveVersion() external pure returns (uint256){
-        return 3;
-    }
     function deposit(address asset,uint256 amount)external onlyOperator{
         IERC20(asset).safeTransferFrom(msg.sender,address(this),amount);
         approve(asset,aave);

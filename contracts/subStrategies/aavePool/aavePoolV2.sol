@@ -18,9 +18,6 @@ contract aavePoolV2 is IAavePool,saveApprove,operatorMap{
         aave = _aave;
         aaveOracle = _aaveOracle;
     }
-    function aaveVersion() external pure returns (uint256){
-        return 2;
-    }
     function deposit(address asset,uint256 amount)external onlyOperator {
         IERC20(asset).safeTransferFrom(msg.sender,address(this),amount);
         approve(asset,aave);
