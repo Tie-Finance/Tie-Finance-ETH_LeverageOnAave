@@ -435,7 +435,8 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         require(_amount <= prevAmt, "INSUFFICIENT_ASSET");
 
         address aave = IAavePool(IaavePool).aave();
-
+        //Calculate how much collateral to be withdrawn
+        uint256 _withdrawAmount = IAavePool(IaavePool).getCollateralTo(address(this),address(depositAsset)) * _amount/prevAmt;
         // Calculate how much eth to be withdrawn from Leverage SS
         uint256 ethWithdraw = (_totalETH() * _amount) / prevAmt;
 
@@ -449,8 +450,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         uint256 ethWithdrawn = IERC20(weth).balanceOf(address(this)) - ethBefore;
 
         // Withdraw WBTC from AAVE
-        uint256 ethDebt = Math.ceilDiv((IAavePool(IaavePool).getDebt(address(this)) * _amount),
-            IAavePool(IaavePool).getCollateralTo(address(this),address(depositAsset)));
+        uint256 ethDebt = Math.ceilDiv((IAavePool(IaavePool).getDebt(address(this)) * _amount), prevAmt);
         if (ethWithdrawn >= ethDebt) {
             if(ethDebt>0){
                 IAave(aave).repay(weth, ethDebt, 2, address(this));
@@ -464,23 +464,23 @@ contract lendingStrategy is operatorMap, ISubStrategy {
                     0
                 );
             }
-            IAave(aave).withdraw(address(depositAsset), _amount, address(this));
-            _amount += swapAmount;
+            IAave(aave).withdraw(address(depositAsset), _withdrawAmount, address(this));
+            _withdrawAmount += swapAmount;
         }else{
             if(ethWithdrawn>0){
                 IAave(aave).repay(weth, ethWithdrawn, 2, address(this));
             }
             uint256 witdrawAmt = IAavePool(IaavePool).getCollateralMaxWithdrawTo(address(this), address(depositAsset));
-            if (witdrawAmt>= _amount){
-                IAave(aave).withdraw(address(depositAsset), _amount, address(this));
+            if (witdrawAmt>= _withdrawAmount){
+                IAave(aave).withdraw(address(depositAsset), _withdrawAmount, address(this));
                 uint256 swapAmount = IUniExchange(exchange).swapExactOutput(
                     address(depositAsset),
                     weth,
                     ethDebt - ethWithdrawn,
-                    _amount
+                    _withdrawAmount
                 );
                 IAave(aave).repay(weth, ethDebt - ethWithdrawn, 2, address(this));
-                _amount -= swapAmount;
+                _withdrawAmount -= swapAmount;
             }else{
                 IAave(aave).withdraw(address(depositAsset), witdrawAmt, address(this));
                 uint256 swapAmount = IUniExchange(exchange).swapExactOutput(
@@ -490,10 +490,10 @@ contract lendingStrategy is operatorMap, ISubStrategy {
                     witdrawAmt
                 );
                 IAave(aave).repay(weth, ethDebt - ethWithdrawn, 2, address(this));
-                IAave(aave).withdraw(address(depositAsset), _amount-witdrawAmt, address(this));
-                _amount -= swapAmount;
+                IAave(aave).withdraw(address(depositAsset), _withdrawAmount-witdrawAmt, address(this));
+                _withdrawAmount -= swapAmount;
             }
         }
-        return _amount;
+        return _withdrawAmount;
     }
 }
