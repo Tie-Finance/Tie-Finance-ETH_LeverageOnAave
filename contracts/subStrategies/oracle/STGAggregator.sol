@@ -41,8 +41,8 @@ contract STGAggregator is AggregatorV3Interface {
         address usdc = sushiPair.token0();
         address stg = sushiPair.token1();
         (,int256 price,,,) = usdcOracle.latestRoundData();
-        int256 balance0 = int256(IERC20(usdc).balanceOf(address(this)));
-        int256 balance1 = int256(IERC20(stg).balanceOf(address(this)));
+        int256 balance0 = int256(IERC20(usdc).balanceOf(address(sushiPair)));
+        int256 balance1 = int256(IERC20(stg).balanceOf(address(sushiPair)));
         return balance0*1e12*price/balance1;
 
     }
