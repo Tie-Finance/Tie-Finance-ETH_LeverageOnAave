@@ -202,7 +202,7 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         Set Fee Rate
      */
     function setFeeRate(uint256 _feeRate,uint256 _rebalanceFee,uint256 slipPage) public onlyOwner {
-        _rebalance(slipPage);
+        _rebalance(slipPage,feePool,true);
         require(_feeRate+_rebalanceFee <magnifier, "INVALID_RATE");
 
         uint256 oldRate = feeRate;
@@ -216,7 +216,6 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         Deposit internal function
      */
     function _deposit(uint256 _amount) internal returns (uint256) {
-        _rebalance(magnifier);
         // Get Prev Deposit Amt
         uint256 prevAmt = _totalAssets();
 
@@ -234,7 +233,6 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         return deposited;
     }
     function _withdraw(uint256 _amount) internal returns (uint256) {
-        _rebalance(magnifier);
         // Get Prev Deposit Amt
         uint256 prevAmt = _totalAssets();
         require(_amount <= prevAmt, "INSUFFICIENT_ASSET");
@@ -242,7 +240,10 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         withdrawToken(_amount);
         return swapDepositAssetTobaseAsset(_amount,0);
     }
-    function _rebalance(uint256 slipPage)internal{
+    function rebalance(uint256 slipPage,address receiver,bool bDepositFee) external {
+        _rebalance(slipPage,receiver,bDepositFee);
+    }
+    function _rebalance(uint256 slipPage,address receiver,bool bDepositFee)internal{
         uint256 totalEF = IERC20(vault).totalSupply();
         if (totalEF == 0){
             return;
@@ -252,16 +253,23 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         if (balance == 0){
             return;
         }
-        uint256 _fee = balance*rebalanceFee/magnifier;
+        uint256 _fee = balance*feeRate/magnifier;
+        uint256 _rebFee = balance*rebalanceFee/magnifier;
+        uint256 _totalBalance = _totalAssets()+balance-_fee-_rebFee;
         if(_fee>0){
-            IERC20(depositAsset).safeTransfer(msg.sender, _fee);
-        }
-        balance = balance - _fee;
-        _fee = balance*feeRate/(magnifier-rebalanceFee);
-        if(_fee>0){
-            uint256 mintAmount = totalEF*_fee/(_totalAssets()+balance-_fee); 
+            uint256 mintAmount = totalEF*_fee/_totalBalance; 
             IVault(vault).mint(mintAmount, feePool);
         }
+        if(_rebFee>0){
+            if(bDepositFee){
+                uint256 mintAmount = totalEF*_rebFee/_totalBalance; 
+                IVault(vault).mint(mintAmount, receiver);
+            }else{
+                IERC20(depositAsset).safeTransfer(receiver, _rebFee);
+                balance -= _rebFee;
+            }
+        }
+
         depositToken(balance);
     }
     function getMinOut(address tokenIn,address tokenOut, uint256 amount,uint256 slipPage)internal view returns(uint256){
