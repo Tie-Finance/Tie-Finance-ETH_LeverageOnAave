@@ -45,10 +45,10 @@ contract stargateStrategy is farmStrategy {
         uniExchange = _uniExchange;
         emit SetExchange(_exchange,_uniExchange);
     }
-    function convertLPToUnderlying(uint256 lpAmount) internal view returns (uint256){
+    function convertLPToDeposit(uint256 lpAmount) internal view returns (uint256){
         return IPool(lpToken).amountLPtoLD(lpAmount);
     }
-    function convertUnderlyingToLp(uint256 _amount) internal view returns (uint256){
+    function convertDepositToLp(uint256 _amount) internal view returns (uint256){
         uint256 temp = IPool(lpToken).amountLPtoLD(_amount);
         return _amount*_amount/temp;
     }
@@ -59,7 +59,7 @@ contract stargateStrategy is farmStrategy {
         ILPStaking(farmPool).deposit(1, IERC20(lpToken).balanceOf(address(this)));
     }
     function withdrawToken(uint256 amount)internal override{
-        uint256 lp = convertUnderlyingToLp(amount);
+        uint256 lp = convertDepositToLp(amount);
         ILPStaking(farmPool).withdraw(1, lp);
         IStargateRouter(depositPool).instantRedeemLocal(2, lp, address(this));
     }
@@ -79,10 +79,9 @@ contract stargateStrategy is farmStrategy {
         uint256 reward = ILPStaking(farmPool).pendingStargate(1, address(this));
         return getMinOut(rewardTokens[0],depositAsset,reward,magnifier-rebalanceFee);
     }
-    function _totalAssets() internal view override returns (uint256){
+    function _totalDeposit() internal view override returns (uint256){
         (uint256 lp,) = ILPStaking(farmPool).userInfo(1, address(this));
-        uint256 amount = convertLPToUnderlying(lp);
-        return getMinOut(depositAsset,baseAsset,amount,0);
+        return convertLPToDeposit(lp);
     }
     function swapDepositAssetTobaseAsset(uint256 amount,uint256 minAmount) internal override returns(uint256){
         approve(depositAsset, exchange);

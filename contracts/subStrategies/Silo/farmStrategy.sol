@@ -236,9 +236,9 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         // Get Prev Deposit Amt
         uint256 prevAmt = _totalAssets();
         require(_amount <= prevAmt, "INSUFFICIENT_ASSET");
-
-        withdrawToken(_amount);
-        return swapDepositAssetTobaseAsset(_amount,0);
+        uint256 _depositAmount = getMinOut(baseAsset,depositAsset,_amount,0);
+        withdrawToken(_depositAmount);
+        return swapDepositAssetTobaseAsset(_depositAmount,0);
     }
     function rebalance(uint256 slipPage,address receiver,bool bDepositFee) external {
         _rebalance(slipPage,receiver,bDepositFee);
@@ -255,7 +255,7 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         }
         uint256 _fee = balance*feeRate/magnifier;
         uint256 _rebFee = balance*rebalanceFee/magnifier;
-        uint256 _totalBalance = _totalAssets()+balance-_fee-_rebFee;
+        uint256 _totalBalance = _totalDeposit()+balance-_fee-_rebFee;
         if(_fee>0){
             uint256 mintAmount = totalEF*_fee/_totalBalance; 
             IVault(vault).mint(mintAmount, feePool);
@@ -288,10 +288,13 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         }
         return amountOut*(magnifier-slipPage)/price1/magnifier;
     }
+    function _totalAssets() internal view returns (uint256){
+        return getMinOut(depositAsset,baseAsset,_totalDeposit(),0);
+    }
     function depositToken(uint256 amount) internal virtual;
     function withdrawToken(uint256 amount)internal virtual;
     function claimRewards(uint256 slipPage)internal virtual;
-    function _totalAssets() internal view  virtual returns (uint256);
+    function _totalDeposit() internal view virtual returns (uint256);
     function swapBaseAssetToDepositAsset(uint256 amount,uint256 minAmount) internal virtual returns(uint256);
     function swapDepositAssetTobaseAsset(uint256 amount,uint256 minAmount) internal virtual returns(uint256);
 }

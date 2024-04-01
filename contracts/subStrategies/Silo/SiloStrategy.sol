@@ -11,15 +11,13 @@ contract SiloStrategy is farmStrategy {
     using SafeERC20 for IERC20;
     uint256 constant calDecimals = 1e18;
     address public shareToken;
-    address public pool;
     // Sub Strategy name
     string public constant poolName = "Silo Strategy V1.0";
 
         // Exchange Address
     address public exchange;
-    address public uniExchange;
 
-    event SetExchange(address exchange,address uniExchange);
+    event SetExchange(address exchange);
 
 
     constructor(
@@ -37,13 +35,12 @@ contract SiloStrategy is farmStrategy {
         /**
         Set Exchange
      */
-    function setExchange(address _exchange,address _uniExchange) external onlyOwner {
-        require(_exchange != address(0) && _uniExchange!= address(0), "INVALID_ADDRESS");
+    function setExchange(address _exchange) external onlyOwner {
+        require(_exchange != address(0), "INVALID_ADDRESS");
         exchange = _exchange;
-        uniExchange = _uniExchange;
-        emit SetExchange(_exchange,_uniExchange);
+        emit SetExchange(_exchange);
     }
-    function convertLPToUnderlying(uint256 lpAmount) internal view returns (uint256){
+    function convertLPToDeposit(uint256 lpAmount) internal view returns (uint256){
         uint256 totalSupply = IERC20(shareToken).totalSupply();
         if (totalSupply == 0){
             return lpAmount;
@@ -51,7 +48,8 @@ contract SiloStrategy is farmStrategy {
         ISilo.AssetStorage memory assetInfo = ISilo(depositPool).assetStorage(depositAsset);
         return lpAmount*assetInfo.totalDeposits/totalSupply;
     }
-    function convertUnderlyingToLp(uint256 _amount) internal view returns (uint256){
+    /*
+    function convertDepositToLp(uint256 _amount) internal view returns (uint256){
         uint256 totalSupply = IERC20(shareToken).totalSupply();
         if (totalSupply == 0){
             return _amount;
@@ -59,12 +57,13 @@ contract SiloStrategy is farmStrategy {
         ISilo.AssetStorage memory assetInfo = ISilo(depositPool).assetStorage(depositAsset);
         return _amount*totalSupply/assetInfo.totalDeposits;
     }
+    */
     function depositToken(uint256 amount) internal override{
         approve(depositAsset, depositPool);
         ISilo(depositPool).depositFor(depositAsset,address(this), amount, false);
     }
     function withdrawToken(uint256 amount)internal override{
-        ISilo(farmPool).withdrawFor(depositAsset,address(this), address(this),amount, false);
+        ISilo(depositPool).withdraw(depositAsset,amount, false);
     }
     function claimRewards(uint256 slipPage)internal override{
         address[] memory assets = new address[](1);
@@ -88,10 +87,9 @@ contract SiloStrategy is farmStrategy {
         uint256 reward = ISiloIncentivesController(farmPool).getRewardsBalance(assets,address(this));
         return getMinOut(rewardTokens[0],depositAsset,reward,magnifier-rebalanceFee);
     }
-    function _totalAssets() internal view override returns (uint256){
+    function _totalDeposit() internal view override returns (uint256){
         uint256 shareBalance = IERC20(shareToken).balanceOf(address(this));
-        uint256 amount = convertLPToUnderlying(shareBalance);
-        return getMinOut(depositAsset,baseAsset,amount,0);
+        return convertLPToDeposit(shareBalance);
     }
     function swapDepositAssetTobaseAsset(uint256 amount,uint256 minAmount) internal override returns(uint256){
         approve(depositAsset, exchange);
@@ -107,12 +105,9 @@ contract SiloStrategy is farmStrategy {
             address reward = rewardTokens[i];
             balance = IERC20(reward).balanceOf(address(this));
             if (balance > 0){
-                uint256 _minOut = getMinOut(reward,baseAsset,balance,slipPage); 
-                approve(reward,uniExchange);
-                balance = IUniExchange(uniExchange).swapExactInput(reward,baseAsset,
-                balance , _minOut);
-                _minOut = getMinOut(baseAsset,depositAsset,balance,slipPage); 
-                swapBaseAssetToDepositAsset(balance,_minOut);
+                uint256 _minOut = getMinOut(reward,depositAsset,balance,slipPage); 
+                approve(reward,exchange);
+                IExchange(exchange).swap(reward, depositAsset, balance, _minOut);
             }
         }
 
