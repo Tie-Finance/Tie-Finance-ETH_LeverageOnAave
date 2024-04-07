@@ -99,7 +99,7 @@ contract SiloStrategy is farmStrategy {
         approve(baseAsset, exchange);
         return IExchange(exchange).swap( baseAsset,depositAsset, amount, minAmount);
     }
-    function swapRewardsToDepositAsset(uint256 slipPage) internal returns(uint256){
+    function swapRewardsToDepositAsset(uint256 slipPage) internal{
         uint256 balance =0;
         for (uint256 i=0;i<rewardTokens.length;i++){
             address reward = rewardTokens[i];
