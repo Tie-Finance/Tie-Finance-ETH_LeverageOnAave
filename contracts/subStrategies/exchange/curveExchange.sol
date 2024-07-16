@@ -12,7 +12,7 @@ import "../saveApprove.sol";
 
 contract curveExchange is IExchange,saveApprove,operatorMap {
     using SafeERC20 for IERC20;
-    address public weth;
+    //address public weth;
     /* *
        *Pool type
        * 0 : normal, use exchange(int128,int128) get_dy(int128,int128)

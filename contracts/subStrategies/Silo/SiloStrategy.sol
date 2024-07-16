@@ -9,7 +9,6 @@ import "../interfaces/IExchange.sol";
 import "../interfaces/IUniExchange.sol";
 contract SiloStrategy is farmStrategy {
     using SafeERC20 for IERC20;
-    uint256 constant calDecimals = 1e18;
     address public shareToken;
     // Sub Strategy name
     string public constant poolName = "Silo Strategy V1.0";
@@ -30,6 +29,8 @@ contract SiloStrategy is farmStrategy {
     )
         farmStrategy(_baseAsset,_depoistAsset,_vault,_depositPool,_farmPool,_feePool){
         ISilo.AssetStorage memory assetInfo = ISilo(_depositPool).assetStorage(_depoistAsset);
+        rewardTokens = new address[](1);
+        rewardTokens[0] = ISiloIncentivesController(farmPool).REWARD_TOKEN();
         shareToken = assetInfo.collateralToken;
     }
         /**
@@ -58,6 +59,9 @@ contract SiloStrategy is farmStrategy {
         return _amount*totalSupply/assetInfo.totalDeposits;
     }
     */
+    function setRewards(address[] memory _rewards) external override onlyOwner {
+        require(false, "CANNOT_RESET_REWARDS");
+    }
     function depositToken(uint256 amount) internal override{
         approve(depositAsset, depositPool);
         ISilo(depositPool).depositFor(depositAsset,address(this), amount, false);
@@ -65,14 +69,14 @@ contract SiloStrategy is farmStrategy {
     function withdrawToken(uint256 amount)internal override{
         ISilo(depositPool).withdraw(depositAsset,amount, false);
     }
-    function claimRewards(uint256 slipPage)internal override{
+    function claimRewards(uint256 slippage)internal override{
         address[] memory assets = new address[](1);
         assets[0] = shareToken;
         uint256 reward = ISiloIncentivesController(farmPool).getRewardsBalance(assets, address(this));
-        uint256 minOut = getMinOut(rewardTokens[0],depositAsset,reward,slipPage == magnifier ? 5000 : slipPage);
+        uint256 minOut = getMinOut(rewardTokens[0],depositAsset,reward,slippage);
         if(minOut>0){
             ISiloIncentivesController(farmPool).claimRewards(assets,type(uint256).max, address(this));
-            swapRewardsToDepositAsset(slipPage);
+            swapRewardsToDepositAsset(slippage);
         }
     }
     function getRewardBalance() external view returns (uint256){
@@ -99,13 +103,13 @@ contract SiloStrategy is farmStrategy {
         approve(baseAsset, exchange);
         return IExchange(exchange).swap( baseAsset,depositAsset, amount, minAmount);
     }
-    function swapRewardsToDepositAsset(uint256 slipPage) internal{
+    function swapRewardsToDepositAsset(uint256 slippage) internal{
         uint256 balance =0;
         for (uint256 i=0;i<rewardTokens.length;i++){
             address reward = rewardTokens[i];
             balance = IERC20(reward).balanceOf(address(this));
             if (balance > 0){
-                uint256 _minOut = getMinOut(reward,depositAsset,balance,slipPage); 
+                uint256 _minOut = getMinOut(reward,depositAsset,balance,slippage); 
                 approve(reward,exchange);
                 IExchange(exchange).swap(reward, depositAsset, balance, _minOut);
             }

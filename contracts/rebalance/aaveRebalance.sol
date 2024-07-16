@@ -10,7 +10,7 @@ contract aaveRebalance is operatorMap {
     uint64 public maxThreshold;
     address immutable public aavePool;
     uint64 public settingMLR;
-    uint64 public slipPage;
+    uint64 public slippage;
     uint256 public gasThreshold;
     uint256 public constant magnifier = 10000;
     event Rebalance(address strategy, address sender,rebalanceType rebalance, uint256 settingMLR,uint256 currentMLR);
@@ -18,7 +18,7 @@ contract aaveRebalance is operatorMap {
         normal,
         force
     }
-    constructor(address _strategy,address _aavePool,uint64 _threshold,uint64 _maxThreshold,uint64 _settingMLR,uint64 _slipPage,uint256 _gasThreshold){
+    constructor(address _strategy,address _aavePool,uint64 _threshold,uint64 _maxThreshold,uint64 _settingMLR,uint64 _slippage,uint256 _gasThreshold){
         require(_strategy != address(0), "INVALID_ADDRESS");
         strategy = _strategy;
         require(_aavePool != address(0), "INVALID_ADDRESS");
@@ -29,7 +29,7 @@ contract aaveRebalance is operatorMap {
         maxThreshold = _maxThreshold;
         settingMLR = _settingMLR;
         gasThreshold =_gasThreshold;
-        slipPage = _slipPage;
+        slippage = _slippage;
     }
     function checkThreshold() public view returns(bool,bytes memory execArgs){
         if(isOverThreshold(maxThreshold)){
@@ -53,9 +53,9 @@ contract aaveRebalance is operatorMap {
     function setDefaultMLR(uint64 _settingMLR)external onlyOwner{
         settingMLR = _settingMLR;
     }
-    function setConfig(uint256 _gasThreshold,uint64 _slipPage)external onlyOwner{
+    function setConfig(uint256 _gasThreshold,uint64 _slippage)external onlyOwner{
         gasThreshold =_gasThreshold;
-        slipPage = _slipPage;
+        slippage = _slippage;
     }
     function rebalance(rebalanceType _type) onlyOperator external{
         if(_type == rebalanceType.force){
@@ -67,7 +67,7 @@ contract aaveRebalance is operatorMap {
         }
         if(isOverThreshold(threshold)){
             if(tx.gasprice<=gasThreshold){
-                IAaveStrategy(strategy).setMLR(settingMLR,slipPage);
+                IAaveStrategy(strategy).setMLR(settingMLR,slippage);
                 emitRebalanceEvent(_type);
             }
         }

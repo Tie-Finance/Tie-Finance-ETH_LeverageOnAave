@@ -232,7 +232,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
     /**
         Set MLR
      */
-    function setMLR(uint256 _mlr,uint256 slipPage) public onlyOperator {
+    function setMLR(uint256 _mlr,uint256 slippage) public onlyOperator {
         require(_mlr < magnifier, "INVALID_RATE");
 
         uint256 oldMlr = mlr;
@@ -240,16 +240,16 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         (uint256 st,uint256 e) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         uint256 recentMlr = e*magnifier/st;
         if (recentMlr>_mlr){
-            reduceMlr(st,e,slipPage);
+            reduceMlr(st,e,slippage);
         }else if(recentMlr<_mlr){
-            raiseMlr(st,e,slipPage);
+            raiseMlr(st,e,slippage);
         }
         emit SetMLR(oldMlr, _mlr);
     }
     /**
         Raise Mlr
      */
-    function raiseMlr(uint256 st,uint256 e,uint256 slipPage) internal {
+    function raiseMlr(uint256 st,uint256 e,uint256 slippage) internal {
 
         require(e * magnifier < st * mlr, "NO_NEED_TO_RAISE");
 
@@ -259,7 +259,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
 
         IAave(aave).borrow(weth, x, 2, 0, address(this));
         uint256 wethAmt = IERC20(weth).balanceOf(address(this));
-        uint256 minShares = IVault(ethLeverage).convertToShares(wethAmt)*(magnifier-slipPage)/magnifier;
+        uint256 minShares = IVault(ethLeverage).convertToShares(wethAmt)*(magnifier-slippage)/magnifier;
         if(minShares>0){
             IVault(ethLeverage).deposit(wethAmt,minShares,address(this));
         }
@@ -273,19 +273,19 @@ contract lendingStrategy is operatorMap, ISubStrategy {
     /**
         Reduce Mlr
      */
-    function reduceMlr(uint256 st,uint256 e,uint256 slipPage) internal {
+    function reduceMlr(uint256 st,uint256 e,uint256 slippage) internal {
 
         require(e * magnifier > st * mlr, "NO_NEED_TO_REDUCE");
 
         uint256 x = (e - (mlr * st) / magnifier);
 
-        uint256 toWithdraw = (x * magnifier) / (magnifier - slipPage);
+        uint256 toWithdraw = (x * magnifier) / (magnifier - slippage);
         uint256 shares = IVault(ethLeverage).convertToShares(toWithdraw);
         uint256 balance = IERC20(ethLeverage).balanceOf(address(this));
         uint256 minWithdraw = x;
         if ( shares> balance){
             toWithdraw = IVault(ethLeverage).convertToAssets(balance);
-            minWithdraw = toWithdraw*(magnifier-slipPage)/magnifier;
+            minWithdraw = toWithdraw*(magnifier-slippage)/magnifier;
         }
         // Withdraw ETH from Leverage
         IVault(ethLeverage).withdraw(toWithdraw,minWithdraw, address(this));
@@ -295,7 +295,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         // Deposit exceed ETH
         if(wethAmt>x){
             uint256 depositAmt = wethAmt - x; 
-            uint256 minShares = IVault(ethLeverage).convertToShares(depositAmt)*(magnifier-slipPage)/magnifier;
+            uint256 minShares = IVault(ethLeverage).convertToShares(depositAmt)*(magnifier-slippage)/magnifier;
             if(minShares>0){
                 IVault(ethLeverage).deposit(depositAmt,minShares,address(this));
             }

@@ -78,6 +78,8 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         require(_depositPool != address(0), "INVALID_ADDRESS");
         require(_farmPool != address(0), "INVALID_ADDRESS");
         require(_feePool != address(0), "INVALID_ADDRESS");
+        require(_baseAsset != address(0), "INVALID_ADDRESS");
+        require(_depositAsset != address(0), "INVALID_ADDRESS");
         vault = _vault;
         depositPool = _depositPool;
         farmPool = _farmPool;
@@ -99,14 +101,14 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
     //////////////////////////////////////////
 
     /**
-        External view function of total WBTC deposited in Covex Booster
+        External view function of total base token
      */
     function totalAssets() external view override returns (uint256) {
         return _totalAssets();
     }
 
     /**
-        Deposit function of WBTC
+        Deposit function of base token
      */
     function deposit(
         uint256 _amount
@@ -116,7 +118,7 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
     }
 
     /**
-        Withdraw function of WBTC
+        Withdraw function of base token
      */
     function withdraw(
         uint256 _amount
@@ -194,15 +196,15 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         emit SetMaxDeposit(maxDeposit);
     }
 
-    function setRewards(address[] memory _rewards) external onlyOwner {
+    function setRewards(address[] memory _rewards) external virtual onlyOwner {
         rewardTokens = _rewards;
         emit SetRewards(_rewards);
     }
     /**
         Set Fee Rate
      */
-    function setFeeRate(uint256 _feeRate,uint256 _rebalanceFee,uint256 slipPage) public onlyOwner {
-        _rebalance(slipPage,feePool,true);
+    function setFeeRate(uint256 _feeRate,uint256 _rebalanceFee,uint256 slippage) public onlyOwner {
+        _rebalance(slippage,feePool,true);
         require(_feeRate+_rebalanceFee <magnifier, "INVALID_RATE");
 
         uint256 oldRate = feeRate;
@@ -240,29 +242,26 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         withdrawToken(_depositAmount);
         return swapDepositAssetTobaseAsset(_depositAmount,0);
     }
-    function rebalance(uint256 slipPage,address receiver,bool bDepositFee) external {
-        _rebalance(slipPage,receiver,bDepositFee);
+    function rebalance(uint256 slippage,address receiver,bool bDepositFee) external {
+        _rebalance(slippage,receiver,bDepositFee);
     }
-    function _rebalance(uint256 slipPage,address receiver,bool bDepositFee)internal{
-        uint256 totalEF = IERC20(vault).totalSupply();
-        if (totalEF == 0){
-            return;
-        }
-        claimRewards(slipPage);
+    function _rebalance(uint256 slippage,address receiver,bool bDepositFee)internal{
+        require(slippage <= 200 , "slippage_TOO_HIGH");
+        uint256 _total = IERC20(vault).totalSupply();
+        require(_total>0, "EMPTY_SUPPLY");
+        claimRewards(slippage);
         uint256 balance = IERC20(depositAsset).balanceOf(address(this));
-        if (balance == 0){
-            return;
-        }
+        require(balance>0, "EMPTY_REBALANCE");
         uint256 _fee = balance*feeRate/magnifier;
         uint256 _rebFee = balance*rebalanceFee/magnifier;
         uint256 _totalBalance = _totalDeposit()+balance-_fee-_rebFee;
         if(_fee>0){
-            uint256 mintAmount = totalEF*_fee/_totalBalance; 
+            uint256 mintAmount = _total*_fee/_totalBalance; 
             IVault(vault).mint(mintAmount, feePool);
         }
         if(_rebFee>0){
             if(bDepositFee){
-                uint256 mintAmount = totalEF*_rebFee/_totalBalance; 
+                uint256 mintAmount = _total*_rebFee/_totalBalance; 
                 IVault(vault).mint(mintAmount, receiver);
             }else{
                 IERC20(depositAsset).safeTransfer(receiver, _rebFee);
@@ -272,7 +271,7 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
 
         depositToken(balance);
     }
-    function getMinOut(address tokenIn,address tokenOut, uint256 amount,uint256 slipPage)internal view returns(uint256){
+    function getMinOut(address tokenIn,address tokenOut, uint256 amount,uint256 slippage)internal view returns(uint256){
         if(amount == 0){
             return 0;
         }
@@ -286,14 +285,14 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         }else{
             amountOut = amountOut*(10**(decimals1+decimals11-decimals0-decimals00));
         }
-        return amountOut*(magnifier-slipPage)/price1/magnifier;
+        return amountOut*(magnifier-slippage)/price1/magnifier;
     }
     function _totalAssets() internal view returns (uint256){
         return getMinOut(depositAsset,baseAsset,_totalDeposit(),0);
     }
     function depositToken(uint256 amount) internal virtual;
     function withdrawToken(uint256 amount)internal virtual;
-    function claimRewards(uint256 slipPage)internal virtual;
+    function claimRewards(uint256 slippage)internal virtual;
     function _totalDeposit() internal view virtual returns (uint256);
     function swapBaseAssetToDepositAsset(uint256 amount,uint256 minAmount) internal virtual returns(uint256);
     function swapDepositAssetTobaseAsset(uint256 amount,uint256 minAmount) internal virtual returns(uint256);

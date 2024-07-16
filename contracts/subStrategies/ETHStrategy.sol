@@ -354,34 +354,34 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
     }
 
 
-    function changeMLR(uint256 _mlr,uint256 swapSlippage) internal {
+    function changeMLR(uint256 _mlr,uint256 swapslippage) internal {
         if (_mlr > mlr){
-            raiseMLR(_mlr, swapSlippage);
+            raiseMLR(_mlr, swapslippage);
         }else if(_mlr < mlr){
-            reduceMLR(_mlr, swapSlippage);
+            reduceMLR(_mlr, swapslippage);
         }
 
     }
-    function raiseMLR(uint256 _mlr,uint256 swapSlippage)internal{
+    function raiseMLR(uint256 _mlr,uint256 swapslippage)internal{
         //flashloan = (mlr*a-b)/(1-mlr*s)
         (uint256 coll,uint256 debt) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         uint256 debtNew = _mlr*coll;
         debt = debt*magnifier;
         if (debtNew>debt){
-            uint256 amount =(debtNew-debt)*magnifier/(magnifier*magnifier-_mlr*(magnifier-swapSlippage));
-            IFlashloanReceiver(receiver).flashLoan(address(baseAsset), amount,abi.encode(SrategyState.RaiseMLR,swapSlippage));
+            uint256 amount =(debtNew-debt)*magnifier/(magnifier*magnifier-_mlr*(magnifier-swapslippage));
+            IFlashloanReceiver(receiver).flashLoan(address(baseAsset), amount,abi.encode(SrategyState.RaiseMLR,swapslippage));
         }
         (uint256 coll1,uint256 debt1) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         emit LTVUpdate(debt/magnifier, coll, debt1, coll1);
     }
-    function reduceMLR(uint256 _mlr,uint256 swapSlippage)internal{
+    function reduceMLR(uint256 _mlr,uint256 swapslippage)internal{
         //flashloan = (b-mlr*a)/(s-mlr)
         (uint256 coll,uint256 debt) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         uint256 debtNew = _mlr*coll;
         debt = debt*magnifier;
         if (debtNew<debt){
-            uint256 amount =(debt-debtNew)/(magnifier-swapSlippage-_mlr);
-            IFlashloanReceiver(receiver).flashLoan(address(baseAsset), amount,abi.encode(SrategyState.ReduceMLR,swapSlippage));
+            uint256 amount =(debt-debtNew)/(magnifier-swapslippage-_mlr);
+            IFlashloanReceiver(receiver).flashLoan(address(baseAsset), amount,abi.encode(SrategyState.ReduceMLR,swapslippage));
         }
         (uint256 coll1,uint256 debt1) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         emit LTVUpdate(debt/magnifier, coll, debt1, coll1);
@@ -390,7 +390,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         Raise LTV
      */
      /*
-    function raiseLTV(uint256 lt,uint256 swapSlippage) external onlyOwner {
+    function raiseLTV(uint256 lt,uint256 swapslippage) external onlyOwner {
         //flashloan = mlr/(1-mlr)*collateral-1/(1-mlr)*debt
         (uint256 st,uint256 e) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
 
@@ -410,7 +410,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         // Transfer base asset to Exchange
         baseAsset.safeTransfer(exchange, baseAmt);
         // Swap baseAsset to depositAsset
-        uint256 minOut = IAavePool(IaavePool).convertAmount(address(baseAsset), address(depositAsset),baseAmt*(magnifier-swapSlippage)/magnifier);
+        uint256 minOut = IAavePool(IaavePool).convertAmount(address(baseAsset), address(depositAsset),baseAmt*(magnifier-swapslippage)/magnifier);
         IExchange(exchange).swap(address(baseAsset),address(depositAsset),baseAmt,minOut);
 
         // Deposit STETH to AAVE
@@ -425,7 +425,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         Reduce LTV
      */
      /*
-    function reduceLTV(uint256 swapSlippage) external onlyOwner {
+    function reduceLTV(uint256 swapslippage) external onlyOwner {
         (uint256 st,uint256 e) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
 
         require(e * magnifier > st * mlr, "NO_NEED_TO_REDUCE");
@@ -558,9 +558,9 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
     /**
         Set MLR
      */
-    function setMLR(uint256 _mlr,uint256 swapSlippage) external nonReentrant onlyOperator {
+    function setMLR(uint256 _mlr,uint256 swapslippage) external nonReentrant onlyOperator {
         require(_mlr > 0 && _mlr < magnifier, "INVALID_RATE");
-        changeMLR(_mlr,swapSlippage);
+        changeMLR(_mlr,swapslippage);
         uint256 oldMlr = mlr;
         mlr = _mlr;
 

@@ -63,12 +63,12 @@ contract stargateStrategy is farmStrategy {
         ILPStaking(farmPool).withdraw(1, lp);
         IStargateRouter(depositPool).instantRedeemLocal(2, lp, address(this));
     }
-    function claimRewards(uint256 slipPage)internal override{
+    function claimRewards(uint256 slippage)internal override{
         uint256 reward = ILPStaking(farmPool).pendingStargate(1, address(this));
-        uint256 minOut = getMinOut(rewardTokens[0],depositAsset,reward,slipPage == magnifier ? 5000 : slipPage);
+        uint256 minOut = getMinOut(rewardTokens[0],depositAsset,reward,slippage == magnifier ? 5000 : slippage);
         if(minOut>0){
             ILPStaking(farmPool).deposit(1, 0);
-            swapRewardsToDepositAsset(slipPage);
+            swapRewardsToDepositAsset(slippage);
         }
     }
     function getRewardBalance() external view returns (uint256){
@@ -91,17 +91,17 @@ contract stargateStrategy is farmStrategy {
         approve(baseAsset, exchange);
         return IExchange(exchange).swap( baseAsset,depositAsset, amount, minAmount);
     }
-    function swapRewardsToDepositAsset(uint256 slipPage) internal{
+    function swapRewardsToDepositAsset(uint256 slippage) internal{
         uint256 balance =0;
         for (uint256 i=0;i<rewardTokens.length;i++){
             address reward = rewardTokens[i];
             balance = IERC20(reward).balanceOf(address(this));
             if (balance > 0){
-                uint256 _minOut = getMinOut(reward,baseAsset,balance,slipPage); 
+                uint256 _minOut = getMinOut(reward,baseAsset,balance,slippage); 
                 approve(reward,uniExchange);
                 balance = IUniExchange(uniExchange).swapExactInput(reward,baseAsset,
                 balance , _minOut);
-                _minOut = getMinOut(baseAsset,depositAsset,balance,slipPage); 
+                _minOut = getMinOut(baseAsset,depositAsset,balance,slippage); 
                 swapBaseAssetToDepositAsset(balance,_minOut);
             }
         }
