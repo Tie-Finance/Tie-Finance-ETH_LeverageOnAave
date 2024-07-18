@@ -205,7 +205,7 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
      */
     function setFeeRate(uint256 _feeRate,uint256 _rebalanceFee,uint256 slippage) public onlyOwner {
         _rebalance(slippage,feePool,true);
-        require(_feeRate+_rebalanceFee <magnifier, "INVALID_RATE");
+        require(_feeRate+_rebalanceFee <5000, "INVALID_RATE");
 
         uint256 oldRate = feeRate;
         feeRate = _feeRate;
