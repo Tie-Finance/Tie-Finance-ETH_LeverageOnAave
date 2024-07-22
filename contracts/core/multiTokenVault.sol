@@ -5,13 +5,14 @@ import "./Vault.sol";
 import "../subStrategies/interfaces/IWeth.sol";
 import "../subStrategies/interfaces/IExchange.sol";
 import "../subStrategies/saveApprove.sol";
-contract ethVault is Vault,saveApprove {
+contract multiTokenVault is Vault,saveApprove {
     using SafeERC20 for IERC20;
     address[] public groupToken;
     // Exchange Address
     address public exchange;
 
     event SetGroupToken(address[] groupToken);
+    event SetExchange(address exchange);
     constructor(
         ERC20 _asset,
         string memory _name,
@@ -75,7 +76,11 @@ contract ethVault is Vault,saveApprove {
         amount = IExchange(exchange).swap(address(asset),token,amount,minWithdraw);
         IERC20(token).safeTransfer(msg.sender,amount);
     }
-
+    function setExchange(address _exchange) external onlyOwner {
+        require(_exchange != address(0), "INVALID_ADDRESS");
+        exchange = _exchange;
+        emit SetExchange(exchange);
+    }
     function setGroupToken(address[] memory _groupToken) external virtual onlyOwner {
         groupToken = _groupToken;
         emit SetGroupToken(_groupToken);
