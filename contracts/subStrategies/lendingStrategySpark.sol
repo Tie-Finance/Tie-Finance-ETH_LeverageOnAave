@@ -4,6 +4,7 @@ import "./lendingStrategy.sol";
 import "./farmSpark.sol";
 
 contract lendingStrategySpark is lendingStrategy,farmSpark{
+    using SafeERC20 for IERC20;
     constructor(
         IERC20 _depositAsset,
         address _weth,
@@ -31,6 +32,9 @@ contract lendingStrategySpark is lendingStrategy,farmSpark{
         return feePool;
     } 
     function rewardsSwap(address tokenIn,address tokenOut,uint256 amount,uint256 minAmount) internal override returns (uint256){
+        if (IERC20(tokenIn).allowance(address(this),exchange)<amount){
+            IERC20(tokenIn).safeApprove(exchange, type(uint256).max);
+        }
         return IUniExchange(exchange).swapExactInput(tokenIn,tokenOut,amount,minAmount);
     }
 }
