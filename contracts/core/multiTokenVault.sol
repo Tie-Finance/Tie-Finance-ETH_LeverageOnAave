@@ -27,9 +27,11 @@ contract multiTokenVault is Vault,saveApprove {
         require(amount != 0, "ZEROassetS");
         require(tokenAvailable(token),"ILLEGAL_TOKEN");
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        approve(token,exchange);
-        amount = IExchange(exchange).swap(token,address(asset),amount,0);
-        require(amount != 0, "ZEROassetS");
+        if (token != address(asset)){
+            approve(token,exchange);
+            amount = IExchange(exchange).swap(token,address(asset),amount,0);
+            require(amount != 0, "ZEROassetS");
+        }
         require(receiver != address(0), "ZERO_ADDRESS");
         require(amount <= maxDeposit, "EXCEED_ONE_TIME_MAX_DEPOSIT");
         // Total Assets amount until now
@@ -52,8 +54,10 @@ contract multiTokenVault is Vault,saveApprove {
         require(balanceOf(msg.sender) >= shares, "EXCEED_TOTAL_DEPOSIT");
 
         uint256 amount = _withdraw(assets, shares,0, address(this));
-        approve(address(asset),exchange);
-        amount = IExchange(exchange).swap(address(asset),token,amount,minWithdraw);
+        if (token != address(asset)){
+            approve(address(asset),exchange);
+            amount = IExchange(exchange).swap(address(asset),token,amount,minWithdraw);
+        }
         IERC20(token).safeTransfer(msg.sender,amount);
     }
 
@@ -72,8 +76,10 @@ contract multiTokenVault is Vault,saveApprove {
 
         // Withdraw asset
         uint256 amount = _withdraw(assets, shares,0, address(this));
-        approve(address(asset),exchange);
-        amount = IExchange(exchange).swap(address(asset),token,amount,minWithdraw);
+        if (token != address(asset)){
+            approve(address(asset),exchange);
+            amount = IExchange(exchange).swap(address(asset),token,amount,minWithdraw);
+        }
         IERC20(token).safeTransfer(msg.sender,amount);
     }
     function setExchange(address _exchange) external onlyOwner {
