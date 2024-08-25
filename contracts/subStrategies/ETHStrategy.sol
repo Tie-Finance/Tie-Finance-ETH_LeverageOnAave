@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
@@ -14,12 +14,13 @@ import "./interfaces/IFlashloanReceiver.sol";
 import "./interfaces/IExchange.sol";
 import "../interfaces/ISubStrategy.sol";
 import "../interfaces/IVault.sol";
+import "./interfaces/IOracle.sol";
 
 contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
 
     using SafeERC20 for IERC20;
     // Sub Strategy name
-    string public constant poolName = "ETHStrategy V0.9";
+    string public constant poolName = "ETHStrategy V1.0";
 
     mapping(address=>bool) operator;
 
@@ -40,6 +41,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
 
     // Fee collector
     address public feePool;
+    address public oracle;
 
     // user input asset
     IERC20 public baseAsset;
@@ -90,6 +92,8 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
     event SetFeeRate(uint256 oldRate, uint256 newRate);
 
     event SetOperator(address operator, bool istrue);
+    
+    event SetOracle(address oracle);
 
     event LTVUpdate(
         uint256 oldDebt,
@@ -106,6 +110,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         address _IaavePool,
         address _vault,
         address _feePool,
+        address _oracle,
         uint8 _emode
     ) {
         mlr = _mlr;
@@ -123,6 +128,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         address aave = IAavePool(_IaavePool).aave();
         baseAsset.safeApprove(aave, type(uint256).max);
         depositAsset.safeApprove(_IaavePool, type(uint256).max);
+        oracle = _oracle;
         if(_emode != 0){
             IAave(aave).setUserEMode(_emode);
         }
@@ -255,9 +261,25 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
             return _realTotalAssets();
         }
     }
+    function getCollateral() internal view returns (uint256){
+        uint256 st = IAavePool(IaavePool).getCollateralTo(address(this),address(depositAsset));
+        (uint256 dPrice,uint8 dDecimal) = IOracle(oracle).getPrice(address(depositAsset));
+        (uint256 bPrice,uint8 bDecimal) = IOracle(oracle).getPrice(address(baseAsset));
+        uint8 _dDecimals = IERC20Metadata(address(depositAsset)).decimals();
+        uint8 _bDecimals = IERC20Metadata(address(baseAsset)).decimals();
+        st = st*dPrice;
+        if(dDecimal+_dDecimals > bDecimal+_bDecimals){
+            st = st/(10**(dDecimal+_dDecimals-bDecimal-_bDecimals));
+        }else{
+            st = st*(10**(bDecimal+_bDecimals-dDecimal-_dDecimals));
+        }
+        return st/bPrice;
+    }
+    function getDebt() internal view returns (uint256){
+        return IAavePool(IaavePool).getDebtTo(address(this),address(baseAsset));
+    }
     function _realTotalAssets()internal view returns (uint256) {
-        (uint256 st,uint256 e) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
-        return st-e;
+        return getCollateral()-getDebt();
     }
     /**
         Deposit function of USDC
@@ -527,7 +549,12 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         baseAsset.safeApprove(_receiver,type(uint256).max);
         emit SetFlashloanReceiver(receiver);
     }
+    function setOracle(address _oracle) public onlyOwner {
+        require(_oracle != address(0), "INVALID_ADDRESS");
+        oracle = _oracle;
 
+        emit SetOracle(_oracle);
+    }
     /**
         Set Exchange
      */

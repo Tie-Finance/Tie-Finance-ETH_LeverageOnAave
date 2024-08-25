@@ -11,10 +11,9 @@ abstract contract farmClaim is Ownable, ReentrancyGuard{
     uint256 public constant calDecimals = 10000;
     uint256 public farmFee = 500;
     uint256 public harvestFee = 500;
-    address public oracle;
     event SetfarmFee(uint256 oldRate, uint256 newRate,uint256 oldHarvestFee, uint256 newHarvestFee);
     event Harvest(address caller,uint256 curDeposit,uint256 fee,uint256 harvestFee);
-    event SetOracle(address oracle);
+
 
     constructor(
     ){
@@ -66,18 +65,13 @@ abstract contract farmClaim is Ownable, ReentrancyGuard{
         harvestFee = _harvestFee;
         emit SetfarmFee(oldRate, _farmFee,oldHarvestFee,_harvestFee);
     }
-    function setOracle(address _oracle) public onlyOwner {
-        require(_oracle != address(0), "INVALID_ADDRESS");
-        oracle = _oracle;
 
-        emit SetOracle(_oracle);
-    }
     function getMinOut(address tokenIn,address tokenOut, uint256 amount,uint256 slippage)internal view returns(uint256){
         if(amount == 0){
             return 0;
         }
-        (uint256 price0,uint8 decimals0) = IOracle(oracle).getPrice(tokenIn);
-        (uint256 price1,uint8 decimals1) = IOracle(oracle).getPrice(tokenOut);
+        (uint256 price0,uint8 decimals0) = IOracle(getOracle()).getPrice(tokenIn);
+        (uint256 price1,uint8 decimals1) = IOracle(getOracle()).getPrice(tokenOut);
         uint8 decimals00 = IERC20Metadata(tokenIn).decimals();
         uint8 decimals11 = IERC20Metadata(tokenOut).decimals();
         uint256 amountOut = amount*price0;
@@ -91,7 +85,8 @@ abstract contract farmClaim is Ownable, ReentrancyGuard{
     function claimRewards(uint256 slippage)internal virtual;
     function _totalDeposit() internal view virtual returns (uint256);
     function depositToken(uint256 amount) internal virtual returns (uint256);
-    function getVault() internal virtual returns(address);
-    function getDepositAsset() internal virtual returns(address);
-    function getFeePool() internal virtual returns(address);
+    function getVault() internal view virtual returns(address);
+    function getDepositAsset() internal view virtual returns(address);
+    function getFeePool() internal view virtual returns(address);
+    function getOracle() internal view virtual returns(address);
 }

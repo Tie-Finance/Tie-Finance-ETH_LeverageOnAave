@@ -13,8 +13,9 @@ contract ETHStrategySpark is ETHStrategy,farmSpark{
         address _IaavePool,
         address _vault,
         address _feePool,
+        address _oracle,
         uint8 _emode
-    ) ETHStrategy(_baseAsset,_depositAsset,_aDepositAsset,_mlr,_IaavePool,_vault,_feePool,_emode){
+    ) ETHStrategy(_baseAsset,_depositAsset,_aDepositAsset,_mlr,_IaavePool,_vault,_feePool,_oracle,_emode){
 
     }
     function _totalDeposit() internal view override returns (uint256){
@@ -23,15 +24,18 @@ contract ETHStrategySpark is ETHStrategy,farmSpark{
     function depositToken(uint256 amount) internal override returns (uint256){
         return _deposit(amount);
     }
-    function getVault() internal override returns(address){
+    function getVault() internal view override returns(address){
         return vault;
     }
-    function getDepositAsset() internal override returns(address){
+    function getDepositAsset() internal view override returns(address){
         return address(depositAsset);
     }
-    function getFeePool() internal override returns(address){
+    function getFeePool() internal view override returns(address){
         return feePool;
     } 
+    function getOracle() internal view override returns(address){
+        return oracle;
+    }
     function rewardsSwap(address tokenIn,address tokenOut,uint256 amount,uint256 minAmount) internal override returns (uint256){
         if (IERC20(tokenIn).allowance(address(this),exchange)<amount){
             IERC20(tokenIn).safeApprove(exchange, type(uint256).max);
