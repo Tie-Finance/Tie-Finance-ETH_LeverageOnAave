@@ -32,7 +32,10 @@ contract('Vault', (accounts) => {
     let aDepositAsset;
     let IaavePool;
     let feePool = accounts[4];
-    let mlr = 5000;  
+    let mlr = 5000;
+    let oracleInst;
+    let FlashloanReceiverInst;
+    let  exchangeInst;
 
     before("init", async()=>{
         assetToken = await WETH.new();
@@ -46,7 +49,7 @@ contract('Vault', (accounts) => {
 
         IaavePool = await AavePool.new(mockAaveInst.address);
 
-        let oracleInst = await Oracle.new();
+        oracleInst = await Oracle.new();
         // IERC20 _baseAsset,
         //     IERC20 _depositAsset,
         //     IERC20 _aDepositAsset,
@@ -60,49 +63,78 @@ contract('Vault', (accounts) => {
         controllerInst = await Controller.new(ethVaultInst.address,eTHStrategySparkInst.address,assetToken.address,treasury);
 
         await ethVaultInst.setController(controllerInst.address);
-        await eTHStrategySparkInst.setController(controllerInst.address);
 
-        let FlashloanReceiverInst = await FlashloanReceiver.new();
+
+        FlashloanReceiverInst = await FlashloanReceiver.new();
 
         await eTHStrategySparkInst.setFlashLoanReceiver(FlashloanReceiverInst.address);
 
-        let  exchangeInst = await Exchange.new();
+        exchangeInst = await Exchange.new();
 
         await eTHStrategySparkInst.setExchange(exchangeInst.address);
 
     })
 
-    it("301 deposit 10 eth should correctly", async () => {
-        let amount =  web3.utils.toWei('10', 'ether');
-        let res = await ethVaultInst.depositEth(0,alice,{from:alice,value:amount});
-
+    it("100 strategy set controller,should pass", async () => {
+        let res = await eTHStrategySparkInst.setController(controllerInst.address);
+      //  console.log(res);
         assert.equal(res.receipt.status,true);
 
     });
 
-    it("302 withdraw eth should correctly", async () => {
-        let totalAsset = await ethVaultInst.totalAssets();
-        let res = web3.utils.fromWei(totalAsset,"ether");
-        console.log("total asset",res);
-
-        let perShare = await ethVaultInst.assetsPerShare();
-        res = web3.utils.fromWei(perShare,"ether");
-        console.log("per share",res);
-
-        let assetDebt = await IaavePool.getCollateralAndDebt(eTHStrategySparkInst.address);
-       // console.log(assetDebt);
-
-        res = web3.utils.fromWei(assetDebt[0],"ether");
-        console.log("asset-debt",res);
-
-        let amount =  web3.utils.toWei('10', 'ether');
-        await aDepositAsset.mint(eTHStrategySparkInst.address,amount);
-
-        res = await ethVaultInst.withdrawEth(amount,0,bob,{from:alice});
-
+    it("101 strategy set operator,should pass", async () => {
+        let res = await eTHStrategySparkInst.setOperator(alice,true);
+        //  console.log(res);
         assert.equal(res.receipt.status,true);
 
     });
+
+    it("102 strategy set fee pool,should pass", async () => {
+        let res = await eTHStrategySparkInst.setFeePool(bob);
+        //  console.log(res);
+        assert.equal(res.receipt.status,true);
+    });
+
+    it("103 strategy set Max Deposit,should pass", async () => {
+        let amount =  web3.utils.toWei('10000', 'ether');
+        let res = await eTHStrategySparkInst.setMaxDeposit(amount);
+        //  console.log(res);
+        assert.equal(res.receipt.status,true);
+    });
+
+
+    it("104 strategy set flash loan reciever,should pass", async () => {
+        let res = await eTHStrategySparkInst.setFlashLoanReceiver(FlashloanReceiverInst.address);
+        //  console.log(res);
+        assert.equal(res.receipt.status,true);
+    });
+
+
+    it("105 strategy set oracle,should pass", async () => {
+        let res = await eTHStrategySparkInst.setOracle(oracleInst.address);
+        //  console.log(res);
+        assert.equal(res.receipt.status,true);
+    });
+
+
+    it("106 strategy set exchanger,should pass", async () => {
+        let res = await eTHStrategySparkInst.setExchange(exchangeInst.address);
+        //  console.log(res);
+        assert.equal(res.receipt.status,true);
+    });
+
+    it("107 strategy set fee rate,should pass", async () => {
+        let res = await eTHStrategySparkInst.setFeeRate(200);
+        //  console.log(res);
+        assert.equal(res.receipt.status,true);
+    });
+
+    it("108 strategy set MLR,should pass", async () => {
+        let res = await eTHStrategySparkInst.setMLR(5000,50,{from:alice});
+        //  console.log(res);
+        assert.equal(res.receipt.status,true);
+    });
+
 
 })
 

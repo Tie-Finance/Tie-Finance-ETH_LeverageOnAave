@@ -1,7 +1,7 @@
 const { expect } = require("chai");
 const { ethers } = require("ethers");
 const Web3 = require('web3');
-
+const assert = require('chai').assert;
 
 const Controller = artifacts.require("ethController");
 const EthVault = artifacts.require("ethVault");
@@ -72,13 +72,15 @@ contract('Vault', (accounts) => {
 
     })
 
-    it("deposit 10 eth should correctly", async () => {   
+    it("201 deposit 10 eth should correctly", async () => {
         let amount =  web3.utils.toWei('10', 'ether');
-        await ethVaultInst.depositEth(0,alice,{from:alice,value:amount});
+        let res = await ethVaultInst.depositEth(0,alice,{from:alice,value:amount});
+
+        assert.equal(res.receipt.status,true);
 
     });
 
-    it("redeem eth should correctly", async () => {
+    it("202 redeem eth should correctly", async () => {
         let totalAsset = await ethVaultInst.totalAssets();
         let res = web3.utils.fromWei(totalAsset,"ether");
         console.log("total asset",res);
@@ -96,7 +98,9 @@ contract('Vault', (accounts) => {
         let amount =  web3.utils.toWei('10', 'ether');
         await aDepositAsset.mint(eTHStrategySparkInst.address,amount);
 
-        await ethVaultInst.redeemEth(amount,0,bob,{from:alice});
+        res = await ethVaultInst.redeemEth(amount,0,bob,{from:alice});
+
+        assert.equal(res.receipt.status,true);
 
     });
 
