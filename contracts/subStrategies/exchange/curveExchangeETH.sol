@@ -30,7 +30,7 @@ contract curveExchangeETH is curveExchange {
         }
         uint256 outAmount = _swap(tokenIn,tokenOut,amount,minAmount);
          if(tokenOutBak ==  wstETH){
-            outAmount = IWstETH(tokenOut).wrap(outAmount);
+            outAmount = IWstETH(tokenOutBak).wrap(outAmount);
             require(outAmount>=minAmountBak,"OVERFLOW_SLIPPAGE");
         }
         IERC20(tokenOutBak).safeTransfer(msg.sender, outAmount);
