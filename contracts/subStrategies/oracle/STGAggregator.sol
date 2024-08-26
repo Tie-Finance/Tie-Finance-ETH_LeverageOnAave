@@ -37,6 +37,23 @@ contract STGAggregator is AggregatorV3Interface {
     ){
         return getRoundData(100);
     }
+    function latestAnswer() external view returns (int256){
+        (,int256 answer,,,) = getRoundData(100);
+        return answer;
+    }
+    function latestTimestamp() external view returns (uint256){
+        return usdcOracle.latestTimestamp();
+    }
+    function latestRound() external view returns (uint256){
+        return usdcOracle.latestRound();
+    }
+    function getAnswer(uint256 roundId) external view returns (int256){
+        (,int256 answer,,,) = getRoundData(uint80(roundId));
+        return answer;
+    }
+    function getTimestamp(uint256 roundId) external view returns (uint256){
+        return usdcOracle.getTimestamp(roundId);
+    }
     function getSTGPrice() internal view returns (int256){
         address usdc = sushiPair.token0();
         address stg = sushiPair.token1();

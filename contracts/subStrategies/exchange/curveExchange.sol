@@ -12,7 +12,7 @@ import "../saveApprove.sol";
 
 contract curveExchange is IExchange,saveApprove,operatorMap {
     using SafeERC20 for IERC20;
-    //address public weth;
+    address public weth;
     /* *
        *Pool type
        * 0 : normal, use exchange(int128,int128) get_dy(int128,int128)
@@ -31,8 +31,8 @@ contract curveExchange is IExchange,saveApprove,operatorMap {
     mapping(uint256=>poolInfo) public curvePoolInfo;
     mapping(uint256=>address[]) public routeInfo;
 
-    constructor(/*address _weth*/) {
-        //weth = _weth;
+    constructor(address _weth){
+        weth = _weth;
     }
     receive() external payable {}
     function setCurvePair(uint8 poolType,address route,address pool,address token0,int128 index0,address token1,int128 index1) external onlyOwner{
@@ -45,7 +45,7 @@ contract curveExchange is IExchange,saveApprove,operatorMap {
         uint256 index = getIndex(routePath[0],routePath[len-1]);
         routeInfo[index] = routePath;
     }
-    function swap(address tokenIn,address tokenOut,uint256 amount,uint256 minAmount) external override onlyOperator returns(uint256){
+    function swap(address tokenIn,address tokenOut,uint256 amount,uint256 minAmount) external virtual override onlyOperator returns(uint256){
         IERC20(tokenIn).safeTransferFrom(msg.sender,address(this),amount);
 //        if (tokenIn == weth){
 //            tokenIn = address(0);
@@ -122,6 +122,14 @@ contract curveExchange is IExchange,saveApprove,operatorMap {
             outAmount = ICurveRoute(curPool.curveRoute).exchange_underlying(curPool.pool,i,j,amount,minAmount);
         }else if(curPool.poolType == 5){
             outAmount = ICurveRoute(curPool.curveRoute).exchange(curPool.pool,uint256(uint128(i)),uint256(uint128(j)),amount,minAmount,false);
+        }else if (curPool.poolType == 6){
+            if (i==0){
+                IWeth(weth).withdraw(amount);
+                outAmount = ICurveAll(curPool.pool).exchange{value: amount}(i,j,amount,minAmount);
+            }else{
+                outAmount = ICurveAll(curPool.pool).exchange(i,j,amount,minAmount);
+                IWeth(weth).deposit{value: outAmount}();
+            }
         }else{
             require(false, "POOL_ERROR!");
         }
@@ -178,7 +186,7 @@ contract curveExchange is IExchange,saveApprove,operatorMap {
     function getIndex(address tokenIn,address tokenOut)internal pure returns(uint256){
         return uint256(uint160(tokenIn)) + uint256(uint160(tokenOut));
     }
-    function getCurveInputValue(address tokenIn,address tokenOut,uint256 outAmount,uint256 maxInput)external view override returns (uint256){
+    function getCurveInputValue(address tokenIn,address tokenOut,uint256 outAmount,uint256 maxInput)external view virtual override returns (uint256){
         /*
         if (tokenIn == weth){
             tokenIn = address(0);
