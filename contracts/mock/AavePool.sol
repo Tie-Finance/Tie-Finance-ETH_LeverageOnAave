@@ -35,10 +35,10 @@ contract AavePool {
     }
 
     function getCollateralTo(address _user,address _token) external view returns (uint256) {
-
+        return _balances[_user] ;
     }
     function getDebtTo(address _user,address _token) external view returns (uint256) {
-
+        0;
     }
     function getCollateralAndDebtTo(address _user,address _token)external view returns (uint256 _collateral, uint256 _debt) {
 
