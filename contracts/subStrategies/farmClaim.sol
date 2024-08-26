@@ -10,19 +10,19 @@ abstract contract farmClaim is Ownable, ReentrancyGuard{
     using SafeERC20 for IERC20;
     uint256 public constant calDecimals = 10000;
     uint256 public farmFee = 500;
-    uint256 public harvestFee = 500;
-    event SetfarmFee(uint256 oldRate, uint256 newRate,uint256 oldHarvestFee, uint256 newHarvestFee);
-    event Harvest(address caller,uint256 curDeposit,uint256 fee,uint256 harvestFee);
+    uint256 public compoundFee = 500;
+    event SetfarmFee(uint256 oldRate, uint256 newRate,uint256 oldCompoundFee, uint256 newCompoundFee);
+    event Compound(address caller,uint256 curDeposit,uint256 fee,uint256 compoundFee);
 
 
     constructor(
     ){
 
     }
-    function harvest(uint256 slippage,address receiver,bool bDepositFee) nonReentrant external {
-        _harvest(slippage,receiver,bDepositFee);
+    function compound(uint256 slippage,address receiver,bool bDepositFee) nonReentrant external {
+        _compound(slippage,receiver,bDepositFee);
     }
-    function _harvest(uint256 slippage,address receiver,bool bDepositFee)internal{
+    function _compound(uint256 slippage,address receiver,bool bDepositFee)internal{
         require(slippage <= 200 , "slippage_TOO_HIGH");
         address _vault = getVault();
         address _depositAsset = getDepositAsset();
@@ -31,7 +31,7 @@ abstract contract farmClaim is Ownable, ReentrancyGuard{
         claimRewards(slippage);
         uint256 balance = IERC20(_depositAsset).balanceOf(address(this));
         require(balance>0, "EMPTY_REBALANCE");
-        uint256 _rebFee = balance*harvestFee/calDecimals;
+        uint256 _rebFee = balance*compoundFee/calDecimals;
         if (!bDepositFee && _rebFee>0){
                 IERC20(_depositAsset).safeTransfer(receiver, _rebFee);
                 balance -= _rebFee;
@@ -39,7 +39,7 @@ abstract contract farmClaim is Ownable, ReentrancyGuard{
         uint256 totalDeposit = _totalDeposit();
         uint256 curDeposit = depositToken(balance);
         uint256 _fee = curDeposit*farmFee/calDecimals;
-        _rebFee = bDepositFee ? curDeposit*harvestFee/calDecimals : 0;
+        _rebFee = bDepositFee ? curDeposit*compoundFee/calDecimals : 0;
         uint256 _totalBalance = totalDeposit+curDeposit-_fee-_rebFee;
         if(_fee>0){
             uint256 mintAmount = _total*_fee/_totalBalance; 
@@ -49,21 +49,21 @@ abstract contract farmClaim is Ownable, ReentrancyGuard{
             uint256 mintAmount = _total*_rebFee/_totalBalance; 
             IVault(_vault).mint(mintAmount, receiver);
         }
-        emit Harvest(msg.sender,curDeposit,_fee,_rebFee);
+        emit Compound(msg.sender,curDeposit,_fee,_rebFee);
         
     }
     /**
         Set Fee Rate
      */
-    function setfarmFee(uint256 _farmFee,uint256 _harvestFee,uint256 slippage) public nonReentrant onlyOwner {
-        _harvest(slippage,getFeePool(),true);
-        require(_farmFee+_harvestFee <5000, "INVALID_RATE");
+    function setfarmFee(uint256 _farmFee,uint256 _compoundFee,uint256 slippage) public nonReentrant onlyOwner {
+        _compound(slippage,getFeePool(),true);
+        require(_farmFee+_compoundFee <5000, "INVALID_RATE");
 
         uint256 oldRate = farmFee;
         farmFee = _farmFee;
-        uint256 oldHarvestFee = harvestFee;
-        harvestFee = _harvestFee;
-        emit SetfarmFee(oldRate, _farmFee,oldHarvestFee,_harvestFee);
+        uint256 oldCompoundFee = compoundFee;
+        compoundFee = _compoundFee;
+        emit SetfarmFee(oldRate, _farmFee,oldCompoundFee,_compoundFee);
     }
 
     function getMinOut(address tokenIn,address tokenOut, uint256 amount,uint256 slippage)internal view returns(uint256){

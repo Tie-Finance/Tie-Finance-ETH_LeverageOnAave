@@ -28,7 +28,7 @@ contract ETHStrategySpark is ETHStrategy,farmSpark{
         return vault;
     }
     function getDepositAsset() internal view override returns(address){
-        return address(depositAsset);
+        return address(baseAsset);
     }
     function getFeePool() internal view override returns(address){
         return feePool;
