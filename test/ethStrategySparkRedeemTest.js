@@ -78,7 +78,7 @@ contract('Vault', (accounts) => {
 
     });
 
-    it("withdraw eth should correctly", async () => {
+    it("redeem eth should correctly", async () => {
         let totalAsset = await ethVaultInst.totalAssets();
         let res = web3.utils.fromWei(totalAsset,"ether");
         console.log("total asset",res);
@@ -96,7 +96,7 @@ contract('Vault', (accounts) => {
         let amount =  web3.utils.toWei('10', 'ether');
         await aDepositAsset.mint(eTHStrategySparkInst.address,amount);
 
-        await ethVaultInst.withdrawEth(amount,0,bob,{from:alice});
+        await ethVaultInst.redeemEth(amount,0,bob,{from:alice});
 
     });
 
