@@ -32,12 +32,12 @@ contract('Vault', (accounts) => {
     let aDepositAsset;
     let IaavePool;
     let feePool = accounts[4];
-    let mlr = 5000;  
+    let mlr = 5000;
 
     before("init", async()=>{
         assetToken = await WETH.new();
         let depositToken = await WETH.new();
-        
+
         ethVaultInst = await EthVault.new(assetToken.address,"tokenspark","tk");
 
         aDepositAsset = await ERC2O.new();
@@ -72,7 +72,9 @@ contract('Vault', (accounts) => {
 
     })
 
-    it("301 deposit 10 eth should correctly", async () => {
+
+
+    it("501 deposit 10 eth should correctly", async () => {
         let amount =  web3.utils.toWei('10', 'ether');
         let res = await ethVaultInst.depositEth(0,alice,{from:alice,value:amount});
 
@@ -80,31 +82,35 @@ contract('Vault', (accounts) => {
 
     });
 
-    it("302 withdraw eth should correctly", async () => {
-        let totalAsset = await ethVaultInst.totalAssets();
-        let res = web3.utils.fromWei(totalAsset,"ether");
-        console.log("total asset",res);
 
-        let perShare = await ethVaultInst.assetsPerShare();
-        res = web3.utils.fromWei(perShare,"ether");
-        console.log("per share",res);
-
-        let assetDebt = await IaavePool.getCollateralAndDebt(eTHStrategySparkInst.address);
-       // console.log(assetDebt);
-
-        res = web3.utils.fromWei(assetDebt[0],"ether");
-        console.log("asset-debt",res);
-
-        let amount =  web3.utils.toWei('10', 'ether');
-        await aDepositAsset.mint(eTHStrategySparkInst.address,amount);
-
-        res = await ethVaultInst.withdrawEth(amount,0,bob,{from:alice});
-
-        assert.equal(res.receipt.status,true);
+    it("502 withdrawable should correctly", async () => {
+        let amount =  web3.utils.toWei('1', 'ether');
+        let res = await controllerInst.withdrawable(amount);
+        console.log("withdrawable",res)
 
     });
 
-})
+    it("503 totalAssets should correctly", async () => {
+        let res = await controllerInst.totalAssets();
+        let amount =  web3.utils.fromWei(res, 'ether');
+        console.log("totalAssets",amount)
 
+    });
+
+    it("504 setVault eth should correctly", async () => {
+        let res = await controllerInst.setVault(ethVaultInst.address);
+        assert.equal(res.receipt.status,true);
+    });
+
+    it("505 setTreasury eth should correctly", async () => {
+        let res = await controllerInst.setTreasury(bob);
+        assert.equal(res.receipt.status,true);
+    });
+
+    it("506 setWithdrawFee eth should correctly", async () => {
+        let res = await controllerInst.setWithdrawFee(500);
+        assert.equal(res.receipt.status,true);
+    });
+})
 
 

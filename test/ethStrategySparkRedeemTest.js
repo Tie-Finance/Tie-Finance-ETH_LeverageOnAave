@@ -72,7 +72,7 @@ contract('Vault', (accounts) => {
 
     })
 
-    it("301 deposit 10 eth should correctly", async () => {
+    it("201 deposit 10 eth should correctly", async () => {
         let amount =  web3.utils.toWei('10', 'ether');
         let res = await ethVaultInst.depositEth(0,alice,{from:alice,value:amount});
 
@@ -80,7 +80,7 @@ contract('Vault', (accounts) => {
 
     });
 
-    it("302 withdraw eth should correctly", async () => {
+    it("202 redeem eth should correctly", async () => {
         let totalAsset = await ethVaultInst.totalAssets();
         let res = web3.utils.fromWei(totalAsset,"ether");
         console.log("total asset",res);
@@ -98,7 +98,7 @@ contract('Vault', (accounts) => {
         let amount =  web3.utils.toWei('10', 'ether');
         await aDepositAsset.mint(eTHStrategySparkInst.address,amount);
 
-        res = await ethVaultInst.withdrawEth(amount,0,bob,{from:alice});
+        res = await ethVaultInst.redeemEth(amount,0,bob,{from:alice});
 
         assert.equal(res.receipt.status,true);
 
