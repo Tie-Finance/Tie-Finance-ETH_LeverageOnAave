@@ -58,13 +58,16 @@ contract curveExchangeETH is curveExchange {
         }
     }
     function curveGet_dy(address tokenIn,address tokenOut,uint256 amount) internal view virtual override returns(uint256){
+        address tokenOutBak = tokenOut;
         if (tokenIn == wstETH){
             tokenIn = stETH;
             amount = IWstETH(tokenIn).getStETHByWstETH(amount);
+        }else if (tokenOut == wstETH){
+            tokenOut = stETH;
         }
         uint256 outValue = curveExchange.curveGet_dy(tokenIn, tokenOut, amount);
-        if(tokenOut == wstETH){
-            outValue = IWstETH(tokenIn).getWstETHByStETH(outValue);
+        if(tokenOutBak == wstETH){
+            outValue = IWstETH(tokenOutBak).getWstETHByStETH(outValue);
         }
         return outValue;
     }
