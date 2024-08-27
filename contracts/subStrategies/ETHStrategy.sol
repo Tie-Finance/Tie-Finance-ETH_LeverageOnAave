@@ -162,7 +162,8 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         }
         _;
         harvested = false;
-        lastTotal = _realTotalAssets();
+        (uint256 st,uint256 e) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
+        lastTotal = st-e;
     }
     //////////////////////////////////////////
     //           Flash loan Fallback        //
@@ -261,20 +262,24 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
             return _realTotalAssets();
         }
     }
-    function getCollateral() internal view returns (uint256){
-        uint256 st = IAavePool(IaavePool).getCollateralTo(address(this),address(depositAsset));
+    function convertDepositToBase(uint256 _amount) internal view returns(uint256){
         (uint256 dPrice,uint8 dDecimal) = IOracle(oracle).getPrice(address(depositAsset));
         (uint256 bPrice,uint8 bDecimal) = IOracle(oracle).getPrice(address(baseAsset));
         uint8 _dDecimals = IERC20Metadata(address(depositAsset)).decimals();
         uint8 _bDecimals = IERC20Metadata(address(baseAsset)).decimals();
-        st = st*dPrice;
+        _amount = _amount*dPrice;
         if(dDecimal+_dDecimals > bDecimal+_bDecimals){
-            st = st/(10**(dDecimal+_dDecimals-bDecimal-_bDecimals));
+            _amount = _amount/(10**(dDecimal+_dDecimals-bDecimal-_bDecimals));
         }else{
-            st = st*(10**(bDecimal+_bDecimals-dDecimal-_dDecimals));
+            _amount = _amount*(10**(bDecimal+_bDecimals-dDecimal-_dDecimals));
         }
-        return st/bPrice;
+        return _amount/bPrice;
     }
+    function getCollateral() internal view returns (uint256){
+        uint256 st = IAavePool(IaavePool).getCollateralTo(address(this),address(depositAsset));
+        return convertDepositToBase(st);
+    }
+
     function getDebt() internal view returns (uint256){
         return IAavePool(IaavePool).getDebtTo(address(this),address(baseAsset));
     }
@@ -302,9 +307,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         require(prevAmt + _amount <= maxDeposit, "EXCEED_MAX_DEPOSIT");
 
         // Calculate Flashloan Fee - in terms of 1e4
-        uint256 fee = IFlashloanReceiver(receiver).getFee();
-        uint256 feeParam = fee + magnifier;
-        uint256 loanAmt = (_amount * mlr) / (feeParam - mlr);
+        uint256 loanAmt = getFlashloanAmount(_amount);
         // uint256 feeAmt = (loanAmt * fee) / magnifier;
 
         // Execute flash loan
@@ -317,7 +320,20 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         uint256 deposited = newAmt - prevAmt;
         return deposited;
     }
-
+    // Calculate flashloan borrow amount
+    function getFlashloanAmount(uint256 _amount) internal view returns (uint256){
+        // Calculate Flashloan Fee - in terms of 1e4
+        (uint256 st,uint256 e) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
+        uint256 recentMlr = st == 0 ? mlr : e*magnifier/st;
+        uint256 fee = IFlashloanReceiver(receiver).getFee();
+        uint256 feeParam = fee + magnifier;
+        uint256 loanAmt = (_amount * recentMlr) / (feeParam - recentMlr);
+        uint256 outValue = IExchange(exchange).getCurve_dy(address(baseAsset), address(depositAsset), loanAmt+_amount);
+        uint256 aaveValue = IAavePool(IaavePool).convertAmount(address(baseAsset), address(depositAsset),loanAmt+_amount);
+        uint256 calMlr = recentMlr*outValue/aaveValue;
+        loanAmt = (_amount * calMlr) / (feeParam - calMlr);
+        return loanAmt;
+    }
     /**
         Withdraw function of USDC
      */
@@ -355,7 +371,8 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
     function harvest() external onlyOperator collectFee {
     }
     function _calculateFee()internal view returns (uint256,uint256) {
-        uint256 currentAssets = _realTotalAssets();
+        (uint256 st,uint256 e) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
+        uint256 currentAssets = st-e;
         if(lastTotal>=currentAssets){
             return (0,0);
         }else{
@@ -377,9 +394,14 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
 
 
     function changeMLR(uint256 _mlr,uint256 swapslippage) internal {
-        if (_mlr > mlr){
+        (uint256 st,uint256 e) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
+        if (st == 0){
+            return;
+        }
+        uint256 recentMlr = e*magnifier/st;
+        if (_mlr > recentMlr){
             raiseMLR(_mlr, swapslippage);
-        }else if(_mlr < mlr){
+        }else if(_mlr < recentMlr){
             reduceMLR(_mlr, swapslippage);
         }
 
@@ -390,7 +412,13 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         uint256 debtNew = _mlr*coll;
         debt = debt*magnifier;
         if (debtNew>debt){
-            uint256 amount =(debtNew-debt)*magnifier/(magnifier*magnifier-_mlr*(magnifier-swapslippage));
+            uint256 fee = IFlashloanReceiver(receiver).getFee();
+            uint256 feeParam = fee + magnifier;
+            uint256 amount =(debtNew-debt)/(feeParam-_mlr);
+            uint256 outValue = getOracleOut(address(baseAsset), address(depositAsset), amount);
+            uint256 aaveValue = IAavePool(IaavePool).convertAmount(address(baseAsset), address(depositAsset),amount);
+            uint256 calMlr = _mlr*outValue/aaveValue;
+            amount =(debtNew-debt)/(feeParam-calMlr);
             IFlashloanReceiver(receiver).flashLoan(address(baseAsset), amount,abi.encode(SrategyState.RaiseMLR,swapslippage));
         }
         (uint256 coll1,uint256 debt1) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
@@ -402,11 +430,33 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         uint256 debtNew = _mlr*coll;
         debt = debt*magnifier;
         if (debtNew<debt){
-            uint256 amount =(debt-debtNew)/(magnifier-swapslippage-_mlr);
+            uint256 fee = IFlashloanReceiver(receiver).getFee();
+            uint256 feeParam = fee + magnifier;
+            uint256 amount =(debt-debtNew)/(feeParam-_mlr);
+            uint256 outValue = getOracleOut(address(depositAsset), address(baseAsset), amount);
+            uint256 aaveValue = IAavePool(IaavePool).convertAmount(address(depositAsset), address(baseAsset),amount);
+            uint256 calMlr = _mlr*aaveValue/outValue;
+            amount =(debt-debtNew)/(feeParam-calMlr);
             IFlashloanReceiver(receiver).flashLoan(address(baseAsset), amount,abi.encode(SrategyState.ReduceMLR,swapslippage));
         }
         (uint256 coll1,uint256 debt1) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         emit LTVUpdate(debt/magnifier, coll, debt1, coll1);
+    }
+    function getOracleOut(address tokenIn,address tokenOut, uint256 amount)internal view returns(uint256){
+        if(amount == 0){
+            return 0;
+        }
+        (uint256 price0,uint8 decimals0) = IOracle(oracle).getPrice(tokenIn);
+        (uint256 price1,uint8 decimals1) = IOracle(oracle).getPrice(tokenOut);
+        uint8 decimals00 = IERC20Metadata(tokenIn).decimals();
+        uint8 decimals11 = IERC20Metadata(tokenOut).decimals();
+        uint256 amountOut = amount*price0;
+        if(decimals0+decimals00 > decimals1+decimals11){
+            amountOut = amountOut/(10**(decimals0+decimals00-decimals1-decimals11));
+        }else{
+            amountOut = amountOut*(10**(decimals1+decimals11-decimals0-decimals00));
+        }
+        return amountOut/price1;
     }
     /**
         Raise LTV
