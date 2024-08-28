@@ -412,8 +412,8 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         } else {
             ethToBorrow =IAavePool(IaavePool).convertAmount(address(depositAsset),weth,_amount *debt/col);
         }
-
-        // Borrow ETH from AAVE
+//
+//        // Borrow ETH from AAVE
         if (ethToBorrow>0){
             IAave(aave).borrow(weth, ethToBorrow, 2, 0, address(this));
             // Deposit to ETH Leverage SS
@@ -427,6 +427,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         uint256 deposited = newAmt - prevAmt;
 
         return deposited;
+
     }
 
     function _withdraw(uint256 _amount) internal returns (uint256) {

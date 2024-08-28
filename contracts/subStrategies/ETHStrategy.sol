@@ -182,7 +182,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         if (curState == SrategyState.Deposit) {
             // Swap baseAsset to depositAsset
             uint256 depoistAmt = IExchange(exchange).swap(address(baseAsset),address(depositAsset),userValue+loanAmt,0);
-    
+
             IAavePool(IaavePool).deposit(address(depositAsset), depoistAmt);
             if (IAavePool(IaavePool).getCollateral(address(this)) == 0) {
                 IAave(aave).setUserUseReserveAsCollateral(address(depositAsset), true);

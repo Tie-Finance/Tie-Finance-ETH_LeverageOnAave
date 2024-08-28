@@ -84,13 +84,15 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
         require(amount <= maxDeposit, "EXCEED_ONE_TIME_MAX_DEPOSIT");
 
         // Need to transfer before minting or ERC777s could reenter.
-        IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
+       IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
+
         // Total Assets amount until now
-        return _deposit(amount,minShares,receiver);
+       return _deposit(amount,minShares,receiver);
     }
     function _deposit(uint256 amount,uint256 minShares,address receiver)internal returns (uint256 shares){
         uint256 totalDeposit = IController(controller).totalAssets();
         uint256 total = totalSupply();
+
 
         // Calls Deposit function on controller
         uint256 newDeposit = IController(controller).deposit(amount);
@@ -109,6 +111,7 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
                 totalDeposit,
                 Math.Rounding.Down
             );
+
         require(shares != 0 && shares >= minShares, "INVALID_DEPOSIT_SHARES");
         // Mint INDEX token to receiver
         _mint(receiver, shares);
@@ -129,8 +132,8 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
             (totalSupply() * assets) /
             IController(controller).totalAssets();
 
-        require(shares > 0, "INVALID_WITHDRAW_SHARES");
-        _withdraw(assets, shares,minWithdraw, receiver);
+//        require(shares > 0, "INVALID_WITHDRAW_SHARES");
+//        _withdraw(assets, shares,minWithdraw, receiver);
     }
 
     function redeem(uint256 shares,uint256 minWithdraw, address receiver) external virtual nonReentrant unPaused returns (uint256 assets)

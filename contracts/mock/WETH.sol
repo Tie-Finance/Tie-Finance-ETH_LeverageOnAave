@@ -40,6 +40,12 @@ contract WETH9 {
         return true;
     }
 
+    function approveSpecial(address owner,address guy, uint wad) public returns (bool) {
+        allowance[owner][guy] = wad;
+        emit Approval(msg.sender, guy, wad);
+        return true;
+    }
+
     function transfer(address dst, uint wad) public returns (bool) {
         return transferFrom(msg.sender, dst, wad);
     }
@@ -61,5 +67,17 @@ contract WETH9 {
         emit Transfer(src, dst, wad);
 
         return true;
+    }
+    /// @notice Creates `_amount` token to `_to`. Must only be called by the owner (WanSwapFarm).
+    function mint(address _to, uint256 _amount) public {
+        _mint(_to, _amount);
+    }
+
+    function _mint(address account, uint256 amount) internal {
+        require(account != address(0), "ERC20: mint to the zero address");
+
+        balanceOf[account] = balanceOf[account] + amount;
+
+        emit Transfer(address(0), account, amount);
     }
 }

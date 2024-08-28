@@ -17,6 +17,7 @@ contract AavePool {
     }
 
     function convertAmount(address _tokenIn,address _tokenOut,uint256 _amount) external view returns (uint256) {
+         return _amount;
     }
 
     function getCollateral(address _user) external view returns (uint256) {
@@ -41,7 +42,7 @@ contract AavePool {
         0;
     }
     function getCollateralAndDebtTo(address _user,address _token)external view returns (uint256 _collateral, uint256 _debt) {
-
+        return (_balances[_user] ,0);
     }
 
     function getCollateralMaxWithdrawTo(address _user,address _token) external view returns (uint256) {

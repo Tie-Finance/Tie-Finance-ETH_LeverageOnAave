@@ -160,7 +160,7 @@ contract ethController is IController, Ownable {
      */
     function _deposit(uint256 _amount) internal returns (uint256 depositAmt) {
             // Calls deposit function on SubStrategy
-        asset.safeTransferFrom(vault, subStrategy, _amount);
-        depositAmt = ISubStrategy(subStrategy).deposit(_amount);
+       asset.safeTransferFrom(vault, subStrategy, _amount);
+       depositAmt = ISubStrategy(subStrategy).deposit(_amount);
     }
 }
