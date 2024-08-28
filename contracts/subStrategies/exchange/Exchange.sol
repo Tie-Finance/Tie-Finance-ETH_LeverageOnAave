@@ -96,6 +96,18 @@ contract ETHLeverExchange is IExchange {
         IWeth(weth).deposit{value: balance}();
         return balance;
     }
+    function getCurve_dy(address tokenIn,address tokenOut,uint256 amount)external view returns (uint256){
+        if(tokenOut == weth){
+            if (tokenIn == stETH){
+                return ICurve(curvePool).get_dy(1, 0, amount);
+            }else if (tokenIn == wstETH){
+                amount = IWstETH(tokenIn).getStETHByWstETH(amount);
+                return ICurve(curvePool).get_dy(1, 0, amount);
+            }
+        }else{
+            require(false,"INVALID_SWAP");
+        }
+    }
     function getCurveInputValue(address tokenIn,address tokenOut,uint256 outAmount,uint256 maxInput)external view override onlyLeverSS returns (uint256){
         if(tokenOut == weth){
             if (tokenIn == stETH){

@@ -78,6 +78,15 @@ contract ETHLeverExchangePolygon is IExchange {
         IWeth(weth).deposit{value: balance}();
         return balance;
     }
+    function getCurve_dy(address tokenIn,address tokenOut,uint256 amount)external view returns (uint256){
+        if(tokenIn == weth && tokenOut == stETH){
+            return ICurvePolygon(curvePool).get_dy(1, 0, amount);
+        }else if(tokenIn == stETH && tokenOut == weth){
+            return ICurvePolygon(curvePool).get_dy(0, 1, amount);
+        }else{
+            require(false,"INVALID_SWAP");
+        }
+    }
     function getCurveInputValue(address tokenIn,address tokenOut,uint256 outAmount,uint256 maxInput)external view override onlyLeverSS returns (uint256){
         if(tokenIn == stETH && tokenOut == weth){
             uint256 curveOut = ICurvePolygon(curvePool).get_dy(0, 1, maxInput);

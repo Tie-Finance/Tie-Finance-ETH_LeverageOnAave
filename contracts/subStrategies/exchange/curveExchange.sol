@@ -209,7 +209,7 @@ contract curveExchange is IExchange,saveApprove,operatorMap {
         */
         return curveGet_dy(tokenIn,tokenOut,amount);
     }
-    function curveGet_dy(address tokenIn,address tokenOut,uint256 amount) internal view returns(uint256){
+    function curveGet_dy(address tokenIn,address tokenOut,uint256 amount) internal view virtual returns(uint256){
         (bool havePool,uint256 outAmount) = singleGet_dy(tokenIn,tokenOut,amount);
         if(havePool){
             return outAmount;
