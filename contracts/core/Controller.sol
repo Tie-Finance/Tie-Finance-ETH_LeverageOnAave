@@ -159,8 +159,8 @@ contract ethController is IController, Ownable {
         Unless loop through sub strategies regiestered and distribute assets according to the allocpoint of each SS
      */
     function _deposit(uint256 _amount) internal returns (uint256 depositAmt) {
-            // Calls deposit function on SubStrategy
-       asset.safeTransferFrom(vault, subStrategy, _amount);
-       depositAmt = ISubStrategy(subStrategy).deposit(_amount);
+      // Calls deposit function on SubStrategy
+      asset.safeTransferFrom(vault, subStrategy, _amount);
+      depositAmt = ISubStrategy(subStrategy).deposit(_amount);
     }
 }

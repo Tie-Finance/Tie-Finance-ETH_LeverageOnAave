@@ -99,7 +99,7 @@ contract('Vault', (accounts) => {
 
     })
 
-    it("701 deposit 10 token should correctly", async () => {
+    it("601 deposit 10 token should correctly", async () => {
         let amount =  web3.utils.toWei('100', 'ether');
         let res =  await lassetToken.mint(alice,amount);
         assert.equal(res.receipt.status,true);
@@ -113,7 +113,7 @@ contract('Vault', (accounts) => {
 
     });
 
-    it("702 redeem token should correctly", async () => {
+    it("602 withdraw eth should correctly", async () => {
         let totalAsset = await vaultInt.totalAssets();
         let res = web3.utils.fromWei(totalAsset,"ether");
         console.log("total asset",res);
@@ -127,7 +127,7 @@ contract('Vault', (accounts) => {
         console.log("asset-debt",res);
 
         let amount =  web3.utils.toWei('10', 'ether');
-        res = await vaultInt.redeem(amount,0,bob,{from:alice});
+        res = await vaultInt.withdraw(amount,0,bob,{from:alice});
 
         assert.equal(res.receipt.status,true);
 

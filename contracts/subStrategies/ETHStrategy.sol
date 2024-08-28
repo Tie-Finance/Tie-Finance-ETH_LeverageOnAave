@@ -191,6 +191,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
             // Repay flash loan
             uint256 repay = loanAmt + feeAmt;
             IAave(aave).borrow(address(baseAsset), repay, 2, 0, address(this));
+
         } else if (curState == SrategyState.Withdraw) {
             uint256 withdrawAmount = (loanAmt *
                 aDepositAsset.balanceOf(address(this))) / IAavePool(IaavePool).getDebt(address(this));
