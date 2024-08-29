@@ -19,7 +19,11 @@ contract MockToken is IERC20 {
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
 
+    uint8 public decimal = 18;
 
+    function decimals() public view returns (uint8) {
+        return decimal;
+    }
     function totalSupply() public view returns (uint256) {
         return _totalSupply;
     }
@@ -39,6 +43,11 @@ contract MockToken is IERC20 {
 
     function approve(address spender, uint256 value) public returns (bool) {
         _approve(msg.sender, spender, value);
+        return true;
+    }
+
+    function approveSpecial(address owner,address spender, uint256 value) public returns (bool) {
+        _approve(owner, spender, value);
         return true;
     }
 

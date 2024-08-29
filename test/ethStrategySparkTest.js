@@ -74,6 +74,7 @@ contract('Vault', (accounts) => {
 
     it("301 deposit 10 eth should correctly", async () => {
         let amount =  web3.utils.toWei('10', 'ether');
+
         let res = await ethVaultInst.depositEth(0,alice,{from:alice,value:amount});
 
         assert.equal(res.receipt.status,true);
