@@ -132,8 +132,8 @@ contract Vault is IVault, ERC20, Ownable, ReentrancyGuard {
             (totalSupply() * assets) /
             IController(controller).totalAssets();
 
-//        require(shares > 0, "INVALID_WITHDRAW_SHARES");
-//        _withdraw(assets, shares,minWithdraw, receiver);
+        require(shares > 0, "INVALID_WITHDRAW_SHARES");
+        _withdraw(assets, shares,minWithdraw, receiver);
     }
 
     function redeem(uint256 shares,uint256 minWithdraw, address receiver) external virtual nonReentrant unPaused returns (uint256 assets)
