@@ -1,23 +1,22 @@
 
-## How to test with truffle
+How to test with truffle
 
-### node version require
- v20.16.0
+node version require
+  v20.16.0
 
-### install ganache
- npm install ganache --global
+install ganache
+  npm install ganache --global
  
-### run ganache
- ganache 
+run ganache
+  ganache 
 
-### install package
- in the folder ./Tie-Finance-ETH_LeverageOnAave run the command:
+install package
+  in the folder ./Tie-Finance-ETH_LeverageOnAave run the command: 
+  npm install  
  
- npm install  
+run test
+  in the folder ./Tie-Finance-ETH_LeverageOnAave run the command:
  
-### run test
- in the folder ./Tie-Finance-ETH_LeverageOnAave run the command:
- 
- truffle test
+  truffle test
  
  
