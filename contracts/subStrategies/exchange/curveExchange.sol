@@ -130,6 +130,9 @@ contract curveExchange is IExchange,saveApprove,operatorMap {
                 outAmount = ICurveAll(curPool.pool).exchange(i,j,amount,minAmount);
                 IWeth(weth).deposit{value: outAmount}();
             }
+        }else if (curPool.poolType == 7){
+            ICurveAll(curPool.pool).exchange(i,j,amount,minAmount);
+            outAmount = IERC20(tokenOut).balanceOf(address(this));
         }else{
             require(false, "POOL_ERROR!");
         }
@@ -249,7 +252,7 @@ contract curveExchange is IExchange,saveApprove,operatorMap {
             i = curPool.index1;
             j = curPool.index0;
         }
-        if (curPool.poolType == 0 || curPool.poolType == 6){
+        if (curPool.poolType == 0 || curPool.poolType == 6 || curPool.poolType == 7){
             outAmount = ICurveAll(curPool.pool).get_dy(i,j,inAmount);
         }else if(curPool.poolType == 1){
             outAmount = ICurveAll(curPool.pool).get_dy_underlying(i,j,inAmount);
