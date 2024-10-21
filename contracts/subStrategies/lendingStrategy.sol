@@ -398,12 +398,8 @@ contract lendingStrategy is operatorMap, ISubStrategy {
         (uint256 col,uint256 debt) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         address aave = IAavePool(IaavePool).aave();
 
-        // Deposit WBTC
-        IAavePool(IaavePool).deposit(address(depositAsset), _amount);
-
-        if (col == 0) {
-            IAave(aave).setUserUseReserveAsCollateral(address(depositAsset), true);
-        }
+        // Deposit token
+        depositToPool(_amount);
 
         // Calculate ETH amount to borrow
         uint256 ethToBorrow;
@@ -465,7 +461,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
                     0
                 );
             }
-            IAave(aave).withdraw(address(depositAsset), _withdrawAmount, address(this));
+            _withdrawAmount = withdrawFromPool(_withdrawAmount);
             _withdrawAmount += swapAmount;
         }else{
             if(ethWithdrawn>0){
@@ -473,7 +469,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
             }
             uint256 witdrawAmt = IAavePool(IaavePool).getCollateralMaxWithdrawTo(address(this), address(depositAsset));
             if (witdrawAmt>= _withdrawAmount){
-                IAave(aave).withdraw(address(depositAsset), _withdrawAmount, address(this));
+                _withdrawAmount =withdrawFromPool(_withdrawAmount);
                 uint256 swapAmount = IUniExchange(exchange).swapExactOutput(
                     address(depositAsset),
                     weth,
@@ -483,7 +479,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
                 IAave(aave).repay(weth, ethDebt - ethWithdrawn, 2, address(this));
                 _withdrawAmount -= swapAmount;
             }else{
-                IAave(aave).withdraw(address(depositAsset), witdrawAmt, address(this));
+                witdrawAmt = withdrawFromPool(witdrawAmt);
                 uint256 swapAmount = IUniExchange(exchange).swapExactOutput(
                     address(depositAsset),
                     weth,
@@ -491,10 +487,23 @@ contract lendingStrategy is operatorMap, ISubStrategy {
                     witdrawAmt
                 );
                 IAave(aave).repay(weth, ethDebt - ethWithdrawn, 2, address(this));
-                IAave(aave).withdraw(address(depositAsset), _withdrawAmount-witdrawAmt, address(this));
+                _withdrawAmount = withdrawFromPool(_withdrawAmount-witdrawAmt)+witdrawAmt;
                 _withdrawAmount -= swapAmount;
             }
         }
         return _withdrawAmount;
+    }
+    function depositToPool(uint256 _amount)internal virtual {
+        // Deposit token
+        IAavePool(IaavePool).deposit(address(depositAsset), _amount);
+        address aave = IAavePool(IaavePool).aave();
+        (uint256 col,) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
+        if (col == 0) {
+            IAave(aave).setUserUseReserveAsCollateral(address(depositAsset), true);
+        }
+    } 
+    function withdrawFromPool(uint256 _amount)internal virtual returns(uint256) {
+        address aave = IAavePool(IaavePool).aave();
+        return IAave(aave).withdraw(address(depositAsset), _amount, address(this));
     }
 }
