@@ -22,7 +22,7 @@ contract SavingDaiStrategy is lendingStrategySpark {
             address _feePool
     ) lendingStrategySpark(_depositAsset,_weth,_mlr,_IaavePool,_vault,_ethLeverage,_feePool){
         savingDai = _savingDai;
-        //IERC20(savingDai).safeApprove(_IaavePool, type(uint256).max);
+        IERC20(savingDai).safeApprove(_IaavePool, type(uint256).max);
         _depositAsset.safeApprove(savingDai, type(uint256).max);
     }
 
