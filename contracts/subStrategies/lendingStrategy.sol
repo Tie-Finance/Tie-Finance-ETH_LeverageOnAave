@@ -391,12 +391,15 @@ contract lendingStrategy is operatorMap, ISubStrategy {
     function _deposit(uint256 _amount) internal returns (uint256) {
         // Get Prev Deposit Amt
         uint256 prevAmt = _totalAssets();
+     
 
         // Check Max Deposit
         require(prevAmt + _amount <= maxDeposit, "EXCEED_MAX_DEPOSIT");
 
         (uint256 col,uint256 debt) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         address aave = IAavePool(IaavePool).aave();
+
+        
 
         // Deposit token
         depositToPool(_amount);

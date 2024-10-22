@@ -1,6 +1,8 @@
 pragma solidity ^0.8.0;
 
-contract MockERC4626 {
+import "./MockToken.sol";
+
+contract MockERC4626 is MockToken {
 
     mapping(address => uint256) public shareHolders;
     address public assetToken;

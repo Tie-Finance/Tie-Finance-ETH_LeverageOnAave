@@ -51,6 +51,7 @@ contract('Vault', (accounts) => {
         assetToken = await WETH.new();
         depositToken = await WETH.new();
 
+        console.log(1);
         savingDaiInt = await MockVault4626.new(assetToken.address);
 
         let mockAaveInst = await Aave.new();
@@ -59,10 +60,11 @@ contract('Vault', (accounts) => {
         ethVaultInst = await MockVault.new(savingDaiInt.address);
 
         lIaavePool = await AavePool.new(mockAaveInst.address);
-   
+        console.log(2);
         //init lendingStrategy
         lassetToken = await ERC2O.new();
         vaultInt = await Vault.new(lassetToken.address,"tokenspark","tk");
+        console.log(21);
         // IERC20 _depositAsset,
         //     address _weth,
         //     uint256 _mlr,
@@ -71,14 +73,15 @@ contract('Vault', (accounts) => {
         //     address _ethLeverage,
         //     address _feePool
         savingDaiStrategyInst = await SavingDaiStrategy.new(savingDaiInt.address,lassetToken.address,depositToken.address,5000,lIaavePool.address,vaultInt.address,ethVaultInst.address,feePool);
-
+        console.log(3);
         let lControllerInst = await Controller.new(vaultInt.address,savingDaiStrategyInst.address,lassetToken.address,treasury);
 
         await vaultInt.setController(lControllerInst.address);
         await savingDaiStrategyInst.setController(lControllerInst.address);
-
+        console.log(4);
         let  lEexchangeInst = await Exchange.new();
         await savingDaiStrategyInst.setExchange(lEexchangeInst.address);
+        console.log(5);
 
     })
 
