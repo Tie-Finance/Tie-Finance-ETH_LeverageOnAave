@@ -14,7 +14,7 @@ const Exchange = artifacts.require("Exchange");
 const Aave =  artifacts.require("Aave");
 const Oracle =  artifacts.require("mockOracle");
 
-c//onst LendingStrategySpark = artifacts.require("lendingStrategySpark");
+//const LendingStrategySpark = artifacts.require("lendingStrategySpark");
 const Vault = artifacts.require("Vault");
 const MockVault = artifacts.require("MockVault");
 const MockVault4626 = artifacts.require("MockERC4626");
@@ -52,6 +52,8 @@ contract('Vault', (accounts) => {
         depositToken = await WETH.new();
 
         savingDaiInt = await MockVault4626.new(assetToken.address);
+
+        let mockAaveInst = await Aave.new();
  
         ////////////////////////////////////////////////////////////////////////////////////////
         ethVaultInst = await MockVault.new(savingDaiInt.address);
@@ -80,7 +82,7 @@ contract('Vault', (accounts) => {
 
     })
 
-    it("701 deposit 10 token should correctly", async () => {
+    it("801 deposit 10 token should correctly", async () => {
         let amount =  web3.utils.toWei('100', 'ether');
         let res =  await lassetToken.mint(alice,amount);
         assert.equal(res.receipt.status,true);
@@ -94,7 +96,7 @@ contract('Vault', (accounts) => {
 
     });
 
-    it("702 redeem token should correctly", async () => {
+    it("802 redeem token should correctly", async () => {
         let totalAsset = await vaultInt.totalAssets();
         let res = web3.utils.fromWei(totalAsset,"ether");
         console.log("total asset",res);

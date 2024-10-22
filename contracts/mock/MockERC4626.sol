@@ -1,9 +1,10 @@
+pragma solidity ^0.8.0;
 
 contract MockERC4626 {
 
     mapping(address => uint256) public shareHolders;
     address public assetToken;
-    uint256 public totalAssets;
+    //uint256 public totalAssets;
     constructor(
         address _asset
     ){
@@ -41,9 +42,11 @@ contract MockERC4626 {
     function previewMint(uint256 shares) external view returns (uint256 assets) {
         return 100000e18;
     }
+
     function mint(uint256 shares, address receiver) external returns (uint256 assets) {
         return shares;
     }
+
     function maxWithdraw(address owner) external view returns (uint256 maxAssets) {
         return 100000e18;
     }
