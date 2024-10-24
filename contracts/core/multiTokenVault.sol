@@ -57,6 +57,8 @@ contract multiTokenVault is Vault,saveApprove {
         if (token != address(asset)){
             approve(address(asset),exchange);
             amount = IExchange(exchange).swap(address(asset),token,amount,minWithdraw);
+        }else{
+            require(amount>=minWithdraw,"INVALID_WITHDRAWN_SHARES");            
         }
         IERC20(token).safeTransfer(msg.sender,amount);
     }
@@ -79,6 +81,8 @@ contract multiTokenVault is Vault,saveApprove {
         if (token != address(asset)){
             approve(address(asset),exchange);
             amount = IExchange(exchange).swap(address(asset),token,amount,minWithdraw);
+        }else{
+            require(amount>=minWithdraw,"INVALID_WITHDRAWN_SHARES");            
         }
         IERC20(token).safeTransfer(msg.sender,amount);
     }
