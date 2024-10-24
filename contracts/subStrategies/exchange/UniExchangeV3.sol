@@ -96,7 +96,7 @@ contract UniExchangeV3 is IUniExchange,saveApprove,operatorMap {
     function swapExactOutput(address tokenIn,address tokenOut,
         uint256 _amountOut,uint256 _amountInMax) external onlyOperator returns (uint256 amountIn){
         IERC20(tokenIn).safeTransferFrom(msg.sender,address(this),_amountInMax);
-        bytes memory path = getSwapPath(tokenIn,tokenOut);
+        bytes memory path = getSwapPath(tokenOut,tokenIn);
         ISwapRouter.ExactOutputParams memory params = ISwapRouter
             .ExactOutputParams({
                 path : path,
@@ -112,7 +112,7 @@ contract UniExchangeV3 is IUniExchange,saveApprove,operatorMap {
         }
     }
     function getSwapOut(address tokenIn,address tokenOut,uint256 amountIn)external onlyOperator returns (uint256 amountOut){
-        bytes memory path = getSwapPath(tokenIn,tokenOut);
+        bytes memory path = getSwapPath(tokenOut,tokenIn);
         return IQuoter(univ3Quoter).quoteExactInput(path,amountIn);
     }
     function getSwapIn(address tokenIn,address tokenOut, uint256 amountOut) external onlyOperator returns (uint256 amountIn){
