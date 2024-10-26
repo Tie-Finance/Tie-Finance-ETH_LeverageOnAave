@@ -246,14 +246,14 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
     //////////////////////////////////////////
 
     /**
-        External view function of total USDC deposited in Covex Booster
+        External view function of total deposit token deposited in lending pool
      */
     function totalAssets() external view override returns (uint256) {
         return _totalAssets();
     }
 
     /**
-        Internal view function of total USDC deposited
+        Internal view function of total deposit token deposited
     */
     function _totalAssets() internal view returns (uint256) {
         if (!harvested){
@@ -288,7 +288,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         return getCollateral()-getDebt();
     }
     /**
-        Deposit function of USDC
+        Deposit function of deposit token
      */
     function deposit(
         uint256 _amount
@@ -336,7 +336,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         return loanAmt;
     }
     /**
-        Withdraw function of USDC
+        Withdraw function of deposit token
      */
     function withdraw(
         uint256 _amount
