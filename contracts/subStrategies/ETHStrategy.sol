@@ -198,7 +198,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
 
             // Repay WETH to aave
             IAave(aave).repay(address(baseAsset), loanAmt, 2, address(this));
-            IAave(aave).withdraw(address(depositAsset), withdrawAmount, address(this));
+            withdrawAmount = IAave(aave).withdraw(address(depositAsset), withdrawAmount, address(this));
 
             // Swap depositAsset to baseAsset
             IExchange(exchange).swap(address(depositAsset),address(baseAsset),withdrawAmount,0);
@@ -225,7 +225,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
             uint256 maxInput = IAavePool(IaavePool).convertAmount(address(baseAsset), address(depositAsset),repayflash*magnifier/(magnifier-slippage));
             IAave(aave).repay(address(baseAsset), loanAmt, 2, address(this));
             uint256 withdrawAmount =IExchange(exchange).getCurveInputValue(address(depositAsset),address(baseAsset),repayflash,maxInput);
-            IAave(aave).withdraw(address(depositAsset), withdrawAmount, address(this));
+            withdrawAmount = IAave(aave).withdraw(address(depositAsset), withdrawAmount, address(this));
             uint256 minOut = IAavePool(IaavePool).convertAmount(address(depositAsset), address(baseAsset),withdrawAmount*(magnifier-slippage)/magnifier);
             IExchange(exchange).swap(address(depositAsset),address(baseAsset),withdrawAmount,minOut);            // Repay Weth to receiver
             uint256 balance = baseAsset.balanceOf(address(this)) - loanAmt - feeAmt;
@@ -359,7 +359,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
             address aave = IAavePool(IaavePool).aave();
             uint256 withdrawAmount = (_amount * aDepositAsset.balanceOf(address(this))) / prevAmt;
             //debt = 0
-            IAave(aave).withdraw(address(depositAsset), withdrawAmount, address(this));
+            withdrawAmount = IAave(aave).withdraw(address(depositAsset), withdrawAmount, address(this));
             // Swap depositAsset to baseAsset
             return IExchange(exchange).swap(address(depositAsset),address(baseAsset),withdrawAmount,0);
         }

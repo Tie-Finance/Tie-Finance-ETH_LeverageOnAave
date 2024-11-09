@@ -8,6 +8,7 @@ contract CurveRouterExchangeETH is CurveRouterExchange {
     address public immutable stETH;
     constructor(address _curveRouter,address _stETH)
     CurveRouterExchange(_curveRouter){
+        require(_stETH != address(0), "ZERO_ADDRESS");
         stETH = _stETH;
     }
     function getSwapPathETH(address tokenIn,address tokenOut)internal view 

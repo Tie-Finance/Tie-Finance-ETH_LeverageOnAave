@@ -4,9 +4,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IVault.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./interfaces/IOracle.sol";
-abstract contract farmClaim is Ownable, ReentrancyGuard{
+abstract contract farmClaim is Ownable{
     using SafeERC20 for IERC20;
     uint256 public constant calDecimals = 10000;
     uint256 public farmFee = 500;
@@ -19,10 +18,11 @@ abstract contract farmClaim is Ownable, ReentrancyGuard{
     ){
 
     }
-    function compound(uint256 slippage,address receiver,bool bDepositFee) nonReentrant external {
+    function compound(uint256 slippage,address receiver,bool bDepositFee) external {
         _compound(slippage,receiver,bDepositFee);
     }
     function _compound(uint256 slippage,address receiver,bool bDepositFee)internal{
+        _beforeCompound();
         require(slippage <= 200 , "slippage_TOO_HIGH");
         address _vault = getVault();
         address _depositAsset = getDepositAsset();
@@ -37,7 +37,7 @@ abstract contract farmClaim is Ownable, ReentrancyGuard{
                 balance -= _rebFee;
         }
         uint256 totalDeposit = _totalDeposit();
-        uint256 curDeposit = depositToken(balance);
+        uint256 curDeposit = depositFunds(balance);
         uint256 _fee = curDeposit*farmFee/calDecimals;
         _rebFee = bDepositFee ? curDeposit*compoundFee/calDecimals : 0;
         uint256 _totalBalance = totalDeposit+curDeposit-_fee-_rebFee;
@@ -55,7 +55,7 @@ abstract contract farmClaim is Ownable, ReentrancyGuard{
     /**
         Set Fee Rate
      */
-    function setfarmFee(uint256 _farmFee,uint256 _compoundFee,uint256 slippage) public nonReentrant onlyOwner {
+    function setfarmFee(uint256 _farmFee,uint256 _compoundFee,uint256 slippage) public onlyOwner {
         _compound(slippage,getFeePool(),true);
         require(_farmFee+_compoundFee <5000, "INVALID_RATE");
 
@@ -82,9 +82,10 @@ abstract contract farmClaim is Ownable, ReentrancyGuard{
         }
         return amountOut*(calDecimals-slippage)/price1/calDecimals;
     }
+    function _beforeCompound()internal virtual;
     function claimRewards(uint256 slippage)internal virtual;
     function _totalDeposit() internal view virtual returns (uint256);
-    function depositToken(uint256 amount) internal virtual returns (uint256);
+    function depositFunds(uint256 amount) internal virtual returns (uint256);
     function getVault() internal view virtual returns(address);
     function getDepositAsset() internal view virtual returns(address);
     function getFeePool() internal view virtual returns(address);

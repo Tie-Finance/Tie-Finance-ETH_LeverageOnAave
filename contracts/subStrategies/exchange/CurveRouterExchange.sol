@@ -22,6 +22,7 @@ contract CurveRouterExchange is IExchange,saveApprove,operatorMap {
     address public immutable curveRouter;
     address public constant ethAddress = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     constructor(address _curveRouter){
+        require(_curveRouter != address(0), "ZERO_ADDRESS");
         curveRouter = _curveRouter;
     }
     function setSwapParams(address tokenIn,address tokenOut,
@@ -74,9 +75,7 @@ contract CurveRouterExchange is IExchange,saveApprove,operatorMap {
         }else{
             require(curRoute[len-1] == tokenIn && curRoute[0] == tokenOut,"ROUTE_ERROR!");
             for (uint256 i=0;i<len/2;i++){
-                address temp = curRoute[i];
-                curRoute[i] = curRoute[len-1-i];
-                curRoute[len-1-i] = temp;
+                (curRoute[i],curRoute[len-1-i]) = (curRoute[len-1-i],curRoute[i]);
             }
         }
     }
@@ -97,7 +96,7 @@ contract CurveRouterExchange is IExchange,saveApprove,operatorMap {
         returns (address _route,address tokenOut,uint256[5] memory _swap_params,address _pool){
         uint256 index = getIndex(token0,token1);
         poolInfo memory curPool = curvePoolInfo[index];
-        _route = curPool.pool;
+        _route = curPool.route;
         tokenOut = token1 != address(0) ? token1 : ethAddress;
         if (token0 == curPool.token0){
             _swap_params[0] = curPool.param[0];

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// This contract is used for testing purposes only.
 pragma solidity ^0.8.0;
 
 
@@ -52,7 +53,7 @@ contract stargateStrategy is farmStrategy {
         uint256 temp = IPool(lpToken).amountLPtoLD(_amount);
         return _amount*_amount/temp;
     }
-    function depositToken(uint256 amount) internal override{
+    function depositFunds(uint256 amount) internal override{
         approve(depositAsset, depositPool);
         IStargateRouter(depositPool).addLiquidity(2, amount, address(this));
         approve(lpToken, farmPool);

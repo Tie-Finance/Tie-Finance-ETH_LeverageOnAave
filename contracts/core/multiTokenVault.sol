@@ -22,7 +22,7 @@ contract multiTokenVault is Vault,saveApprove {
         groupToken = _groupToken;
     }
 
-    function depositToken(address token,uint256 amount,uint256 minShares,address receiver) external returns (uint256 shares)
+    function depositToken(address token,uint256 amount,uint256 minShares,address receiver) external nonReentrant unPaused returns (uint256 shares)
     {
         require(amount != 0, "ZEROassetS");
         require(tokenAvailable(token),"ILLEGAL_TOKEN");

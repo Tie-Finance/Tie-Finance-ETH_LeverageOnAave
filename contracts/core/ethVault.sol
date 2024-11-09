@@ -39,7 +39,7 @@ contract ethVault is Vault {
 
         uint256 amount = _withdraw(assets, shares,minWithdraw, address(this));
         IWeth(address(asset)).withdraw(amount);
-        receiver.transfer(amount);
+        safeTransferETH(receiver,amount);
     }
 
     function redeemEth(uint256 shares,uint256 minWithdraw,address payable receiver) external nonReentrant unPaused returns (uint256 assets)
@@ -57,7 +57,10 @@ contract ethVault is Vault {
         // Withdraw asset
         uint256 amount = _withdraw(assets, shares,minWithdraw, address(this));
         IWeth(address(asset)).withdraw(amount);
-        receiver.transfer(amount);
+        safeTransferETH(receiver,amount);
     }
-
+function safeTransferETH(address to, uint256 value) internal {
+    (bool success, ) = to.call{value: value}("");
+    require(success, "ETH Transfer failed");
+}
 }

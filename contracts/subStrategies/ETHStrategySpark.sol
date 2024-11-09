@@ -18,10 +18,13 @@ contract ETHStrategySpark is ETHStrategy,farmSpark{
     ) ETHStrategy(_baseAsset,_depositAsset,_aDepositAsset,_mlr,_IaavePool,_vault,_feePool,_oracle,_emode){
 
     }
+    function _beforeCompound() nonReentrant collectFee internal override{
+
+    }
     function _totalDeposit() internal view override returns (uint256){
         return _totalAssets();
     }
-    function depositToken(uint256 amount) internal override returns (uint256){
+    function depositFunds(uint256 amount) internal override returns (uint256){
         return _deposit(amount);
     }
     function getVault() internal view override returns(address){

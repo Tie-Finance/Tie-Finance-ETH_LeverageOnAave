@@ -225,7 +225,7 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
         require(prevAmt + _amount <= maxDeposit, "EXCEED_MAX_DEPOSIT");
 
         uint256 outAmount = swapBaseAssetToDepositAsset(_amount,0);
-        depositToken(outAmount);
+        depositFunds(outAmount);
         // Get new total assets amount
         uint256 newAmt = _totalAssets();
 
@@ -269,7 +269,7 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
             }
         }
 
-        depositToken(balance);
+        depositFunds(balance);
     }
     function getMinOut(address tokenIn,address tokenOut, uint256 amount,uint256 slippage)internal view returns(uint256){
         if(amount == 0){
@@ -290,7 +290,7 @@ abstract contract farmStrategy is operatorMap,saveApprove, ISubStrategy {
     function _totalAssets() internal view returns (uint256){
         return getMinOut(depositAsset,baseAsset,_totalDeposit(),0);
     }
-    function depositToken(uint256 amount) internal virtual;
+    function depositFunds(uint256 amount) internal virtual;
     function withdrawToken(uint256 amount)internal virtual;
     function claimRewards(uint256 slippage)internal virtual;
     function _totalDeposit() internal view virtual returns (uint256);

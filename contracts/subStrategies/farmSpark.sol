@@ -6,16 +6,16 @@ import "./interfaces/IRewardsController.sol";
 abstract contract farmSpark is farmClaim{
     address public rewardsController;
     address[] public rewardsAssets;
-    event SetRawardsInfo(address caller,address rewardsController,address[] rewardsAssets);
+    event SetRewardsInfo(address caller,address rewardsController,address[] rewardsAssets);
 
     constructor(
     ) {
 
     }
-    function setRawardsInfo(address _rewardsController,address[] calldata _rewardsAssets) external onlyOwner{
+    function setRewardsInfo(address _rewardsController,address[] calldata _rewardsAssets) external onlyOwner{
         rewardsController = _rewardsController;
         rewardsAssets = _rewardsAssets;
-        emit SetRawardsInfo(msg.sender,_rewardsController,_rewardsAssets);
+        emit SetRewardsInfo(msg.sender,_rewardsController,_rewardsAssets);
     }
     function claimRewards(uint256 slippage)internal override{
         (address[] memory rewardsList, uint256[] memory claimedAmounts) = 

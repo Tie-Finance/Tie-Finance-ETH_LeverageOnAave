@@ -30,6 +30,7 @@ contract wstETHAggregator is AggregatorV3Interface {
         uint256 updatedAt,
         uint80 answeredInRound
     ){
+        require(false,"NOT_SUPPORTED");
         (roundId,answer,startedAt,updatedAt,answeredInRound) = AggregatorV3Interface(stEthAggregator).getRoundData(_roundId);
         answer = getWstEthPrice(answer);
     }
@@ -53,6 +54,7 @@ contract wstETHAggregator is AggregatorV3Interface {
         return AggregatorV3Interface(stEthAggregator).latestRound();
     }
     function getAnswer(uint256 roundId) external view returns (int256){
+        require(false,"NOT_SUPPORTED");
         return getWstEthPrice(AggregatorV3Interface(stEthAggregator).getAnswer(roundId));
     }
     function getTimestamp(uint256 roundId) external view returns (uint256){

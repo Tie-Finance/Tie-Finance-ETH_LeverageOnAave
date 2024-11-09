@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
+// This contract is used for testing purposes only.
 pragma solidity ^0.8.0;
 import "../interfaces/AggregatorV3Interface.sol";
 import "../interfaces/IUniswapV2Pair.sol";

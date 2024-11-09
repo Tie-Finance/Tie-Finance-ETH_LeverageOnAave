@@ -62,7 +62,7 @@ contract SiloStrategy is farmStrategy {
     function setRewards(address[] memory _rewards) external override onlyOwner {
         require(false, "CANNOT_RESET_REWARDS");
     }
-    function depositToken(uint256 amount) internal override{
+    function depositFunds(uint256 amount) internal override{
         approve(depositAsset, depositPool);
         ISilo(depositPool).depositFor(depositAsset,address(this), amount, false);
     }
