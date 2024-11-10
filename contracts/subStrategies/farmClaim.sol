@@ -18,6 +18,15 @@ abstract contract farmClaim is Ownable{
     ){
 
     }
+    
+    //Obtain the amount of deposited assets after claiming farm rewards and performing swaps.
+    function getFarmRevenue() external view returns(uint256){
+        return getFarmRevenue_oracle();
+    }
+    //Obtain the copound fee of deposited assets after claiming farm rewards and performing swaps.
+    function getCompoundFee() external view returns(uint256){
+        return getFarmRevenue_oracle()*compoundFee/calDecimals;
+    }
     function compound(uint256 slippage,address receiver,bool bDepositFee) external {
         _compound(slippage,receiver,bDepositFee);
     }
@@ -57,7 +66,7 @@ abstract contract farmClaim is Ownable{
      */
     function setfarmFee(uint256 _farmFee,uint256 _compoundFee,uint256 slippage) public onlyOwner {
         _compound(slippage,getFeePool(),true);
-        require(_farmFee+_compoundFee <5000, "INVALID_RATE");
+        require(_farmFee+_compoundFee <calDecimals/2, "INVALID_RATE");
 
         uint256 oldRate = farmFee;
         farmFee = _farmFee;
@@ -83,6 +92,7 @@ abstract contract farmClaim is Ownable{
         return amountOut*(calDecimals-slippage)/price1/calDecimals;
     }
     function _beforeCompound()internal virtual;
+    function getFarmRevenue_oracle()internal view virtual returns (uint256);
     function claimRewards(uint256 slippage)internal virtual;
     function _totalDeposit() internal view virtual returns (uint256);
     function depositFunds(uint256 amount) internal virtual returns (uint256);

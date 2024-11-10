@@ -13,8 +13,9 @@ import "./interfaces/IAavePool.sol";
 import "./interfaces/IUniExchange.sol";
 import "../interfaces/ISubStrategy.sol";
 import "../interfaces/IVault.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract lendingStrategy is operatorMap, ISubStrategy {
+contract lendingStrategy is operatorMap, ISubStrategy,ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // Sub Strategy name
@@ -151,7 +152,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
      */
     function deposit(
         uint256 _amount
-    ) external override onlyController collectFee returns (uint256) {
+    ) external override onlyController collectFee nonReentrant returns (uint256) {
         uint256 deposited = _deposit(_amount);
         return deposited;
     }
@@ -161,7 +162,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
      */
     function withdraw(
         uint256 _amount
-    ) external override onlyController collectFee returns (uint256) {
+    ) external override onlyController collectFee nonReentrant returns (uint256) {
         uint256 withdrawn = _withdraw(_amount);
         return withdrawn;
     }
@@ -232,7 +233,7 @@ contract lendingStrategy is operatorMap, ISubStrategy {
     /**
         Set MLR
      */
-    function setMLR(uint256 _mlr,uint256 slippage) public onlyOperator {
+    function setMLR(uint256 _mlr,uint256 slippage) public onlyOperator nonReentrant {
         require(_mlr < magnifier, "INVALID_RATE");
 
         uint256 oldMlr = mlr;

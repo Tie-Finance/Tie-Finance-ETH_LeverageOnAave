@@ -292,7 +292,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
      */
     function deposit(
         uint256 _amount
-    ) external override onlyController collectFee returns (uint256) {
+    ) external override onlyController collectFee nonReentrant returns (uint256) {
         uint256 deposited = _deposit(_amount);
         return deposited;
     }
@@ -340,7 +340,7 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
      */
     function withdraw(
         uint256 _amount
-    ) external override onlyController collectFee returns (uint256) {
+    ) external override onlyController collectFee nonReentrant returns (uint256) {
 
         // Get Prev Deposit Amt
         uint256 prevAmt = _totalAssets();
@@ -426,18 +426,17 @@ contract ETHStrategy is Ownable,ReentrancyGuard, ISubStrategy, IETHLeverage {
         emit LTVUpdate(debt/magnifier, coll, debt1, coll1);
     }
     function reduceMLR(uint256 _mlr,uint256 swapslippage)internal{
-        //flashloan = (b-mlr*a)/(s-mlr)
+        //flashloan = (d-mlr*c)/(1-(1+fee)*mlr)
         (uint256 coll,uint256 debt) = IAavePool(IaavePool).getCollateralAndDebt(address(this));
         uint256 debtNew = _mlr*coll;
         debt = debt*magnifier;
         if (debtNew<debt){
             uint256 fee = IFlashloanReceiver(receiver).getFee();
-            uint256 feeParam = fee + magnifier;
-            uint256 amount =(debt-debtNew)/(feeParam-_mlr);
+            uint256 amount =(debt-debtNew)/(magnifier-(magnifier+fee)*_mlr/magnifier);
             uint256 outValue = getOracleOut(address(depositAsset), address(baseAsset), amount);
             uint256 aaveValue = IAavePool(IaavePool).convertAmount(address(depositAsset), address(baseAsset),amount);
             uint256 calMlr = _mlr*aaveValue/outValue;
-            amount =(debt-debtNew)/(feeParam-calMlr);
+            amount =(debt-debtNew)/(magnifier-(magnifier+fee)*calMlr/magnifier);
             IFlashloanReceiver(receiver).flashLoan(address(baseAsset), amount,abi.encode(SrategyState.ReduceMLR,swapslippage));
         }
         (uint256 coll1,uint256 debt1) = IAavePool(IaavePool).getCollateralAndDebt(address(this));

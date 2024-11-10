@@ -18,7 +18,7 @@ contract lendingStrategySpark is lendingStrategy,farmSpark{
     ) lendingStrategy(_depositAsset,_weth,_mlr,_IaavePool,_vault,_ethLeverage,_feePool){
 
     }
-    function _beforeCompound() collectFee internal override{
+    function _beforeCompound() nonReentrant collectFee internal override{
 
     }
     function _totalDeposit() internal view override returns (uint256){

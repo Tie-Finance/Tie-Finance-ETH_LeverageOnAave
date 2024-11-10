@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//This contract is deprecated
 pragma solidity ^0.8.0;
 import "./curveExchange.sol";
 import "../interfaces/IStETH.sol";

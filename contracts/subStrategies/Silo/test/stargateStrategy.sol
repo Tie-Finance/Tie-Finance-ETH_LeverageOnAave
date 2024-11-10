@@ -94,7 +94,8 @@ contract stargateStrategy is farmStrategy {
     }
     function swapRewardsToDepositAsset(uint256 slippage) internal{
         uint256 balance =0;
-        for (uint256 i=0;i<rewardTokens.length;i++){
+        uint256 nLen = rewardTokens.length;
+        for (uint256 i=0;i<nLen;i++){
             address reward = rewardTokens[i];
             balance = IERC20(reward).balanceOf(address(this));
             if (balance > 0){
