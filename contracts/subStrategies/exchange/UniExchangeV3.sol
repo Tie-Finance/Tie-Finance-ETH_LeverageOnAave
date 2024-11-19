@@ -112,11 +112,11 @@ contract UniExchangeV3 is IUniExchange,saveApprove,operatorMap {
         }
     }
     function getSwapOut(address tokenIn,address tokenOut,uint256 amountIn)external onlyOperator returns (uint256 amountOut){
-        bytes memory path = getSwapPath(tokenOut,tokenIn);
+        bytes memory path = getSwapPath(tokenIn,tokenOut);
         return IQuoter(univ3Quoter).quoteExactInput(path,amountIn);
     }
     function getSwapIn(address tokenIn,address tokenOut, uint256 amountOut) external onlyOperator returns (uint256 amountIn){
-        bytes memory path = getSwapPath(tokenIn,tokenOut);
+        bytes memory path = getSwapPath(tokenOut,tokenIn);
         return IQuoter(univ3Quoter).quoteExactOutput(path,amountOut);
     }
 }
