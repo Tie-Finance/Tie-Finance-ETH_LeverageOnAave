@@ -95,6 +95,24 @@ contract multiTokenVault is Vault,saveApprove {
         groupToken = _groupToken;
         emit SetGroupToken(_groupToken);
     }
+    function convertTokenToShares(address token,
+        uint256 assets
+    ) public view returns (uint256) {
+        if (token != address(asset)){
+            assets = IExchange(exchange).getCurve_dy(token, address(asset), assets);
+        }
+        return convertToShares(assets);
+    }
+
+    function convertSharesToToken(address token,
+        uint256 shares
+    ) public view returns (uint256) {
+        uint256 assets = convertToAssets(shares);
+        if (token != address(asset)){
+            assets = IExchange(exchange).getCurve_dy(address(asset),token,  assets);
+        }
+        return assets;
+    }
 
     function tokenAvailable(address token) internal view returns(bool){
         uint256 nLen = groupToken.length;
